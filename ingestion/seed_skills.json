@@ -1,0 +1,142 @@
+[
+  {
+    "name": "Event-Driven Architecture Basics",
+    "slug": "eda-basics",
+    "level_hint": 0,
+    "description": "Fundamental concepts of event-driven systems, messaging patterns, and asynchronous communication",
+    "prerequisites": []
+  },
+  {
+    "name": "Message Queues Fundamentals",
+    "slug": "message-queues",
+    "level_hint": 0,
+    "description": "Understanding message queues, pub/sub patterns, and queue-based architectures",
+    "prerequisites": ["eda-basics"]
+  },
+  {
+    "name": "Apache Kafka Fundamentals",
+    "slug": "kafka-fundamentals",
+    "level_hint": 0,
+    "description": "Core Kafka concepts: topics, partitions, producers, consumers, and brokers",
+    "prerequisites": ["message-queues"]
+  },
+  {
+    "name": "Kafka Advanced Topics",
+    "slug": "kafka-advanced",
+    "level_hint": 1,
+    "description": "Advanced Kafka features: transactions, exactly-once semantics, and performance tuning",
+    "prerequisites": ["kafka-fundamentals"]
+  },
+  {
+    "name": "Kafka Streams",
+    "slug": "kafka-streams",
+    "level_hint": 1,
+    "description": "Stream processing with Kafka Streams API",
+    "prerequisites": ["kafka-fundamentals"]
+  },
+  {
+    "name": "Event Sourcing",
+    "slug": "event-sourcing",
+    "level_hint": 1,
+    "description": "Event sourcing pattern: storing state as a sequence of events",
+    "prerequisites": ["eda-basics"]
+  },
+  {
+    "name": "CQRS Pattern",
+    "slug": "cqrs",
+    "level_hint": 1,
+    "description": "Command Query Responsibility Segregation: separating reads and writes",
+    "prerequisites": ["event-sourcing"]
+  },
+  {
+    "name": "Saga Pattern",
+    "slug": "saga-pattern",
+    "level_hint": 1,
+    "description": "Distributed transactions using the saga pattern",
+    "prerequisites": ["eda-basics"]
+  },
+  {
+    "name": "Change Data Capture (CDC)",
+    "slug": "cdc",
+    "level_hint": 1,
+    "description": "Capturing database changes as events using CDC tools like Debezium",
+    "prerequisites": ["eda-basics", "kafka-fundamentals"]
+  },
+  {
+    "name": "Redis Streams",
+    "slug": "redis-streams",
+    "level_hint": 0,
+    "description": "Using Redis Streams for lightweight event streaming",
+    "prerequisites": ["message-queues"]
+  },
+  {
+    "name": "Microservices Architecture",
+    "slug": "microservices",
+    "level_hint": 0,
+    "description": "Microservices design principles and patterns",
+    "prerequisites": []
+  },
+  {
+    "name": "API Gateway Patterns",
+    "slug": "api-gateway",
+    "level_hint": 1,
+    "description": "API gateway patterns for microservices",
+    "prerequisites": ["microservices"]
+  },
+  {
+    "name": "Service Mesh",
+    "slug": "service-mesh",
+    "level_hint": 2,
+    "description": "Service mesh concepts and implementations (Istio, Linkerd)",
+    "prerequisites": ["microservices"]
+  },
+  {
+    "name": "Distributed Tracing",
+    "slug": "distributed-tracing",
+    "level_hint": 1,
+    "description": "Tracing requests across microservices with OpenTelemetry",
+    "prerequisites": ["microservices"]
+  },
+  {
+    "name": "AWS EventBridge",
+    "slug": "aws-eventbridge",
+    "level_hint": 1,
+    "description": "Serverless event bus on AWS",
+    "prerequisites": ["eda-basics"]
+  },
+  {
+    "name": "AWS SQS and SNS",
+    "slug": "aws-sqs-sns",
+    "level_hint": 0,
+    "description": "AWS managed queuing and pub/sub services",
+    "prerequisites": ["message-queues"]
+  },
+  {
+    "name": "gRPC and Protocol Buffers",
+    "slug": "grpc",
+    "level_hint": 1,
+    "description": "High-performance RPC framework with Protocol Buffers",
+    "prerequisites": ["microservices"]
+  },
+  {
+    "name": "Idempotency Patterns",
+    "slug": "idempotency",
+    "level_hint": 1,
+    "description": "Ensuring idempotent operations in distributed systems",
+    "prerequisites": ["eda-basics"]
+  },
+  {
+    "name": "Eventual Consistency",
+    "slug": "eventual-consistency",
+    "level_hint": 1,
+    "description": "Understanding and implementing eventual consistency",
+    "prerequisites": ["eda-basics"]
+  },
+  {
+    "name": "Schema Registry",
+    "slug": "schema-registry",
+    "level_hint": 1,
+    "description": "Managing event schemas with Confluent Schema Registry",
+    "prerequisites": ["kafka-fundamentals"]
+  }
+]
