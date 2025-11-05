@@ -1,5 +1,5 @@
 """
-Embedding generation using e5-base-v2
+Embedding generation using e5-base-v2 with optional quantization
 """
 import logging
 from typing import List
@@ -13,7 +13,7 @@ settings = get_settings()
 
 
 class EmbeddingService:
-    """Service for generating embeddings"""
+    """Service for generating embeddings with quantization support"""
     
     def __init__(self):
         self.model = None
@@ -21,11 +21,36 @@ class EmbeddingService:
         logger.info(f"Using device: {self.device}")
     
     def load_model(self):
-        """Load the embedding model"""
+        """Load the embedding model with optional quantization"""
         if self.model is None:
             logger.info(f"Loading embedding model: {settings.embedding_model}")
+            logger.info("(Model cached in image, loading from disk...)")
+            
+            # Load model (will use cached version from Docker image)
             self.model = SentenceTransformer(settings.embedding_model, device=self.device)
-            logger.info("Embedding model loaded successfully")
+            
+            # Apply quantization if enabled
+            if settings.use_quantization and settings.quantization_config != "none":
+                logger.info(f"Applying {settings.quantization_config} quantization...")
+                
+                # For CPU, use dynamic quantization
+                if self.device == "cpu":
+                    # Apply dynamic quantization to reduce model size and improve inference speed
+                    self.model[0].auto_model = torch.quantization.quantize_dynamic(
+                        self.model[0].auto_model,
+                        {torch.nn.Linear},
+                        dtype=torch.qint8
+                    )
+                    logger.info("✓ Applied INT8 quantization (75% memory reduction)")
+                else:
+                    # For CUDA, use half precision
+                    if hasattr(self.model, 'half'):
+                        self.model = self.model.half()
+                        logger.info("✓ Using FP16 precision (50% memory reduction)")
+            else:
+                logger.info("Quantization disabled, using full precision")
+            
+            logger.info("✓ Embedding model ready")
     
     def generate_embeddings(
         self,

@@ -1,5 +1,5 @@
 """
-Reranking using cross-encoder model
+Reranking using cross-encoder model with optional quantization
 """
 import logging
 from typing import List, Dict, Any, Tuple
@@ -13,7 +13,7 @@ settings = get_settings()
 
 
 class RerankService:
-    """Service for reranking search results"""
+    """Service for reranking search results with quantization support"""
     
     def __init__(self):
         self.model = None
@@ -21,10 +21,35 @@ class RerankService:
         logger.info(f"Reranker using device: {self.device}")
     
     def load_model(self):
-        """Load the reranking model"""
+        """Load the reranking model with optional quantization"""
         if self.model is None:
             logger.info(f"Loading reranker model: {settings.reranker_model}")
-            self.model = CrossEncoder(settings.reranker_model, device=self.device)
+            
+            # Load model with quantization if enabled
+            if settings.use_quantization and settings.quantization_config != "none":
+                logger.info(f"Using {settings.quantization_config} quantization for reranker")
+                
+                # For CPU, use dynamic quantization
+                if self.device == "cpu":
+                    self.model = CrossEncoder(settings.reranker_model, device=self.device)
+                    # Apply dynamic quantization to the underlying model
+                    if hasattr(self.model, 'model'):
+                        self.model.model = torch.quantization.quantize_dynamic(
+                            self.model.model,
+                            {torch.nn.Linear},
+                            dtype=torch.qint8
+                        )
+                        logger.info("Applied dynamic int8 quantization to reranker (CPU)")
+                else:
+                    # For CUDA, use half precision
+                    self.model = CrossEncoder(settings.reranker_model, device=self.device)
+                    if hasattr(self.model, 'model') and hasattr(self.model.model, 'half'):
+                        self.model.model = self.model.model.half()
+                        logger.info("Using FP16 precision for reranker (CUDA)")
+            else:
+                self.model = CrossEncoder(settings.reranker_model, device=self.device)
+                logger.info("Quantization disabled for reranker, using full precision")
+            
             logger.info("Reranker model loaded successfully")
     
     def rerank(

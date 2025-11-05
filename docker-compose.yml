@@ -47,6 +47,78 @@ services:
       timeout: 5s
       retries: 5
 
+  rag-service:
+    build:
+      context: ./services/rag
+      dockerfile: Dockerfile
+    container_name: learnpath-rag
+    ports:
+      - "8001:8001"
+    env_file:
+      - .env.docker
+    depends_on:
+      - postgres
+      - qdrant
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  planner-service:
+    build:
+      context: ./services/planner
+      dockerfile: Dockerfile
+    container_name: learnpath-planner
+    ports:
+      - "8002:8002"
+    env_file:
+      - .env.docker
+    depends_on:
+      - postgres
+      - rag-service
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  quiz-service:
+    build:
+      context: ./services/quiz
+      dockerfile: Dockerfile
+    container_name: learnpath-quiz
+    ports:
+      - "8003:8003"
+    env_file:
+      - .env.docker
+    depends_on:
+      - postgres
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8003/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  gateway:
+    build:
+      context: ./gateway
+      dockerfile: Dockerfile
+    container_name: learnpath-gateway
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env.docker
+    depends_on:
+      - rag-service
+      - planner-service
+      - quiz-service
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
 volumes:
   postgres_data:
     driver: local

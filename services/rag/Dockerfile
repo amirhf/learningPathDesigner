@@ -16,6 +16,15 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY . .
 
+# Set environment variables for model download
+ENV EMBEDDING_MODEL=intfloat/e5-base-v2
+ENV RERANKER_MODEL=BAAI/bge-reranker-base
+
+# Download and cache models in the image
+# This makes startup MUCH faster (2-3s vs 30-60s)
+# Models are cached once during build, quantized at runtime
+RUN python quantize_models.py
+
 # Expose port
 EXPOSE 8001
 

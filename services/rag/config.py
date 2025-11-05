@@ -25,6 +25,10 @@ class Settings(BaseSettings):
     reranker_model: str = "BAAI/bge-reranker-base"
     embedding_dimension: int = 768
     
+    # Quantization settings
+    use_quantization: bool = True
+    quantization_config: str = "int8"  # Options: int8, int4, none
+    
     # Search
     default_top_k: int = 20
     default_rerank_top_n: int = 5
