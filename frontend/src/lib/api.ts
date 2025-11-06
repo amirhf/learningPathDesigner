@@ -112,14 +112,16 @@ class APIClient {
   async createPlan(
     goal: string,
     timeBudgetHours: number,
-    prerequisites?: string[]
+    hoursPerWeek: number,
+    currentSkills?: string[]
   ): Promise<LearningPlan> {
     return this.request<LearningPlan>('/api/plan', {
       method: 'POST',
       body: JSON.stringify({
         goal,
+        current_skills: currentSkills || [],
         time_budget_hours: timeBudgetHours,
-        prerequisites: prerequisites || [],
+        hours_per_week: hoursPerWeek,
       }),
     })
   }

@@ -17,6 +17,7 @@ export default function NewPlanPage() {
   
   const [goal, setGoal] = useState('')
   const [timeBudget, setTimeBudget] = useState(10)
+  const [hoursPerWeek, setHoursPerWeek] = useState(5)
   const [prerequisites, setPrerequisites] = useState<string[]>([])
   const [prerequisiteInput, setPrerequisiteInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -55,7 +56,7 @@ export default function NewPlanPage() {
 
     setLoading(true)
     try {
-      const plan = await api.createPlan(goal, timeBudget, prerequisites)
+      const plan = await api.createPlan(goal, timeBudget, hoursPerWeek, prerequisites)
       
       toast({
         title: 'Plan Created!',
@@ -118,7 +119,7 @@ export default function NewPlanPage() {
               <div className="space-y-2">
                 <Label htmlFor="timeBudget" className="flex items-center gap-2">
                   <Clock className="h-4 w-4" />
-                  Time Budget (hours)
+                  Total Time Budget (hours)
                 </Label>
                 <div className="flex items-center gap-4">
                   <Input
@@ -133,11 +134,35 @@ export default function NewPlanPage() {
                     required
                   />
                   <span className="text-sm text-muted-foreground">
-                    Estimated: {Math.ceil(timeBudget / 8)} days at 8 hours/day
+                    Total time you can dedicate
+                  </span>
+                </div>
+              </div>
+
+              {/* Hours Per Week */}
+              <div className="space-y-2">
+                <Label htmlFor="hoursPerWeek" className="flex items-center gap-2">
+                  <Clock className="h-4 w-4" />
+                  Hours Per Week
+                </Label>
+                <div className="flex items-center gap-4">
+                  <Input
+                    id="hoursPerWeek"
+                    type="number"
+                    min="1"
+                    max="168"
+                    value={hoursPerWeek}
+                    onChange={(e) => setHoursPerWeek(parseInt(e.target.value) || 1)}
+                    disabled={loading}
+                    className="w-32"
+                    required
+                  />
+                  <span className="text-sm text-muted-foreground">
+                    Estimated: {Math.ceil(timeBudget / hoursPerWeek)} weeks
                   </span>
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  How much time can you dedicate to learning this?
+                  How many hours per week can you study?
                 </p>
               </div>
 

@@ -54,7 +54,8 @@ func main() {
 				"info":   "GET /",
 				"health": "GET /health",
 				"search": "POST /api/search",
-				"plan":   "POST /api/plan (not yet proxied - use :8002 directly)",
+				"plan":   "POST /api/plan",
+				"replan": "POST /api/plan/:id/replan",
 				"quiz":   "POST /api/quiz/generate (not yet proxied - use :8003 directly)",
 			},
 			"services": gin.H{
@@ -79,10 +80,9 @@ func main() {
 		// RAG Service
 		api.POST("/search", handlers.Search(cfg))
 		
-		// Planner Service (proxy to planner service)
-		api.POST("/plan", func(c *gin.Context) {
-			c.JSON(501, gin.H{"error": "Planner endpoints not yet implemented in gateway. Use planner service directly at :8002"})
-		})
+		// Planner Service
+		api.POST("/plan", handlers.CreatePlan(cfg))
+		api.POST("/plan/:id/replan", handlers.Replan(cfg))
 		
 		// Quiz Service (proxy to quiz service)
 		api.POST("/quiz/generate", func(c *gin.Context) {
