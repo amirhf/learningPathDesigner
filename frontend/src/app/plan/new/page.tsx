@@ -58,6 +58,24 @@ export default function NewPlanPage() {
     try {
       const plan = await api.createPlan(goal, timeBudget, hoursPerWeek, prerequisites)
       
+      // Save plan to localStorage for dashboard
+      try {
+        const storedPlans = localStorage.getItem('user_plans')
+        const plans = storedPlans ? JSON.parse(storedPlans) : []
+        plans.push({
+          id: plan.id,
+          goal: plan.goal,
+          time_budget_hours: plan.time_budget_hours,
+          progress: 0,
+          lessons_completed: 0,
+          lessons_total: plan.lessons.length,
+          created_at: new Date().toISOString(),
+        })
+        localStorage.setItem('user_plans', JSON.stringify(plans))
+      } catch (storageError) {
+        console.error('Failed to save to localStorage:', storageError)
+      }
+      
       toast({
         title: 'Plan Created!',
         description: 'Your personalized learning plan is ready',

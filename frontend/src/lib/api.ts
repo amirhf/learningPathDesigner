@@ -115,7 +115,7 @@ class APIClient {
     hoursPerWeek: number,
     currentSkills?: string[]
   ): Promise<LearningPlan> {
-    return this.request<LearningPlan>('/api/plan', {
+    const response = await this.request<any>('/api/plan', {
       method: 'POST',
       body: JSON.stringify({
         goal,
@@ -124,10 +124,43 @@ class APIClient {
         hours_per_week: hoursPerWeek,
       }),
     })
+    
+    // Transform backend response to frontend format
+    return this.transformPlanResponse(response)
   }
 
   async getPlan(planId: string): Promise<LearningPlan> {
-    return this.request<LearningPlan>(`/api/plan/${planId}`)
+    const response = await this.request<any>(`/api/plan/${planId}`)
+    return this.transformPlanResponse(response)
+  }
+  
+  private transformPlanResponse(response: any): LearningPlan {
+    return {
+      id: response.plan_id,
+      goal: response.goal,
+      time_budget_hours: response.total_hours || 0,
+      lessons: (response.milestones || []).map((milestone: any) => ({
+        id: milestone.milestone_id,
+        title: milestone.title,
+        description: milestone.description,
+        estimated_duration_minutes: Math.round((milestone.estimated_hours || 0) * 60),
+        resources: (milestone.resources || []).map((resource: any) => ({
+          id: resource.resource_id,
+          title: resource.title,
+          description: resource.why_included || '',
+          url: resource.url,
+          type: 'resource',
+          score: 1.0,
+          metadata: {
+            duration_min: resource.duration_min,
+            level: resource.level,
+            skills: resource.skills,
+          },
+        })),
+        order: milestone.order,
+      })),
+      created_at: new Date().toISOString(),
+    }
   }
 
   async updatePlan(

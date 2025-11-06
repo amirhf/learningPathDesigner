@@ -1,45 +1,71 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { Target, Clock, BookOpen, TrendingUp, Plus } from 'lucide-react'
+import { Target, Clock, BookOpen, TrendingUp, Plus, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
+import { useToast } from '@/components/ui/use-toast'
 
-// Mock data - in real app, fetch from API
-const mockPlans = [
-  {
-    id: '1',
-    goal: 'Learn Python FastAPI',
-    time_budget_hours: 20,
-    progress: 65,
-    lessons_completed: 4,
-    lessons_total: 6,
-    created_at: '2025-11-01',
-  },
-  {
-    id: '2',
-    goal: 'Master React Hooks',
-    time_budget_hours: 15,
-    progress: 30,
-    lessons_completed: 2,
-    lessons_total: 5,
-    created_at: '2025-11-03',
-  },
-]
-
-const mockStats = {
-  total_plans: 2,
-  completed_plans: 0,
-  total_hours: 35,
-  completed_lessons: 6,
+// For now, we'll use localStorage to track created plans
+// In production, this would come from a user-specific API endpoint
+interface DashboardPlan {
+  id: string
+  goal: string
+  time_budget_hours: number
+  progress: number
+  lessons_completed: number
+  lessons_total: number
+  created_at: string
 }
 
 export default function DashboardPage() {
-  const [plans] = useState(mockPlans)
-  const [stats] = useState(mockStats)
+  const [plans, setPlans] = useState<DashboardPlan[]>([])
+  const [loading, setLoading] = useState(true)
+  const { toast } = useToast()
+
+  useEffect(() => {
+    loadPlans()
+  }, [])
+
+  const loadPlans = () => {
+    try {
+      // Get plans from localStorage
+      const storedPlans = localStorage.getItem('user_plans')
+      if (storedPlans) {
+        const parsedPlans = JSON.parse(storedPlans)
+        setPlans(parsedPlans)
+      }
+    } catch (error) {
+      console.error('Error loading plans:', error)
+      toast({
+        title: 'Error Loading Plans',
+        description: 'Could not load your learning plans',
+        variant: 'destructive',
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const stats = {
+    total_plans: plans.length,
+    completed_plans: plans.filter(p => p.progress === 100).length,
+    total_hours: plans.reduce((acc, p) => acc + p.time_budget_hours, 0),
+    completed_lessons: plans.reduce((acc, p) => acc + p.lessons_completed, 0),
+  }
+
+  if (loading) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <div className="flex items-center justify-center min-h-[400px]">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="container mx-auto px-4 py-8">

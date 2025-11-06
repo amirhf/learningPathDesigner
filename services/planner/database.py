@@ -107,6 +107,8 @@ class DatabaseClient:
                 return dict(result) if result else None
         except Exception as e:
             logger.error(f"Error fetching plan: {e}")
+            # Rollback the transaction to recover from error
+            self.conn.rollback()
             return None
     
     def update_plan(

@@ -82,6 +82,7 @@ func main() {
 		
 		// Planner Service
 		api.POST("/plan", handlers.CreatePlan(cfg))
+		api.GET("/plan/:id", handlers.GetPlan(cfg))
 		api.POST("/plan/:id/replan", handlers.Replan(cfg))
 		
 		// Quiz Service (proxy to quiz service)

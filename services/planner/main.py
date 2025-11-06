@@ -81,6 +81,64 @@ async def health_check():
     )
 
 
+@app.get("/plan/{plan_id}", response_model=PlanResponse)
+async def get_plan(plan_id: str):
+    """
+    Retrieve a learning plan by ID
+    """
+    try:
+        db_client = get_db_client()
+        plan_data = db_client.get_plan(plan_id)
+        
+        if not plan_data:
+            raise HTTPException(status_code=404, detail="Plan not found")
+        
+        # Parse the stored plan data
+        stored_plan = plan_data.get('plan_data', {})
+        milestones = []
+        
+        for i, milestone_data in enumerate(stored_plan.get('milestones', [])):
+            resources = []
+            
+            for j, res_data in enumerate(milestone_data.get('resources', [])):
+                resources.append(ResourceItem(
+                    resource_id=res_data['resource_id'],
+                    title=res_data.get('title', 'Unknown'),
+                    url=res_data.get('url', ''),
+                    duration_min=res_data.get('duration_min', 0),
+                    level=res_data.get('level'),
+                    skills=res_data.get('skills', []),
+                    why_included=res_data.get('why_included', 'Relevant to milestone'),
+                    order=j + 1
+                ))
+            
+            milestones.append(Milestone(
+                milestone_id=milestone_data.get('milestone_id', str(uuid.uuid4())),
+                title=milestone_data.get('title', f'Milestone {i+1}'),
+                description=milestone_data.get('description', ''),
+                resources=resources,
+                estimated_hours=milestone_data.get('estimated_hours', 0),
+                skills_gained=milestone_data.get('skills_gained', []),
+                order=i + 1
+            ))
+        
+        return PlanResponse(
+            plan_id=plan_data['plan_id'],
+            goal=plan_data['goal'],
+            total_hours=plan_data.get('total_hours', 0),
+            estimated_weeks=plan_data.get('estimated_weeks', 1),
+            milestones=milestones,
+            prerequisites_met=True,
+            reasoning=stored_plan.get('reasoning', 'Learning plan retrieved successfully')
+        )
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error retrieving plan: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/plan", response_model=PlanResponse)
 async def generate_plan(request: PlanRequest):
     """
