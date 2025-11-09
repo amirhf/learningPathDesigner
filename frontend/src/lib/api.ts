@@ -129,20 +129,30 @@ class APIClient {
     goal: string,
     timeBudgetHours: number,
     hoursPerWeek: number,
-    currentSkills?: string[]
+    currentSkills?: string[],
+    userId?: string
   ): Promise<LearningPlan> {
+    const requestBody = {
+      goal,
+      current_skills: currentSkills || [],
+      time_budget_hours: timeBudgetHours,
+      hours_per_week: hoursPerWeek,
+      user_id: userId,
+    }
+    console.log('API createPlan request body:', requestBody)
+    
     const response = await this.request<any>('/api/plan', {
       method: 'POST',
-      body: JSON.stringify({
-        goal,
-        current_skills: currentSkills || [],
-        time_budget_hours: timeBudgetHours,
-        hours_per_week: hoursPerWeek,
-      }),
+      body: JSON.stringify(requestBody),
     })
     
     // Transform backend response to frontend format
     return this.transformPlanResponse(response)
+  }
+
+  async getUserPlans(userId: string): Promise<any[]> {
+    const response = await this.request<any>(`/api/plan/user/${userId}/plans`)
+    return response.plans || []
   }
 
   async getPlan(planId: string): Promise<LearningPlan> {

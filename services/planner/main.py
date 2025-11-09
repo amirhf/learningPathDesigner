@@ -220,9 +220,10 @@ async def generate_plan(request: PlanRequest):
         
         estimated_weeks = max(1, int(total_hours / request.hours_per_week))
         
-        # Save plan to database (using anonymous user for now)
+        # Save plan to database
+        logger.info(f"Saving plan with user_id: {request.user_id}")
         plan_id = db_client.save_plan(
-            user_id="anonymous",
+            user_id=request.user_id or "anonymous",
             goal=request.goal,
             plan_data=plan_data,
             total_hours=total_hours,
@@ -244,6 +245,25 @@ async def generate_plan(request: PlanRequest):
         raise HTTPException(status_code=503, detail="RAG service unavailable")
     except Exception as e:
         logger.error(f"Plan generation error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/user/{user_id}/plans")
+async def get_user_plans(user_id: str):
+    """
+    Get all plans for a specific user
+    """
+    try:
+        db_client = get_db_client()
+        plans = db_client.get_plans_by_user(user_id)
+        
+        return {
+            "user_id": user_id,
+            "plans": plans,
+            "total": len(plans)
+        }
+    except Exception as e:
+        logger.error(f"Error fetching user plans: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

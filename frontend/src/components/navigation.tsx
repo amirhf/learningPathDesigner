@@ -1,10 +1,13 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { BookOpen, Search, Target, GraduationCap, User } from 'lucide-react'
+import { BookOpen, Search, Target, GraduationCap, User, LogIn } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { useStore } from '@/lib/store'
+import { getCurrentUser } from '@/lib/supabase'
 
 const navItems = [
   { href: '/', label: 'Home', icon: BookOpen },
@@ -15,6 +18,23 @@ const navItems = [
 
 export function Navigation() {
   const pathname = usePathname()
+  const { user, setUser } = useStore()
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true)
+
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const currentUser = await getCurrentUser()
+        setUser(currentUser)
+      } catch (error) {
+        console.error('Error checking auth:', error)
+      } finally {
+        setIsCheckingAuth(false)
+      }
+    }
+
+    checkAuth()
+  }, [setUser])
 
   return (
     <nav className="border-b bg-background">
@@ -50,11 +70,28 @@ export function Navigation() {
           </div>
 
           <div className="flex items-center gap-2">
-            <Link href="/auth">
-              <Button variant="ghost" size="icon">
-                <User className="h-5 w-5" />
-              </Button>
-            </Link>
+            {!isCheckingAuth && (
+              user ? (
+                <Link href="/profile">
+                  <Button 
+                    variant="ghost" 
+                    size="icon"
+                    className={cn(
+                      pathname === '/profile' && 'bg-secondary'
+                    )}
+                  >
+                    <User className="h-5 w-5" />
+                  </Button>
+                </Link>
+              ) : (
+                <Link href="/auth">
+                  <Button variant="ghost" className="gap-2">
+                    <LogIn className="h-4 w-4" />
+                    Sign In
+                  </Button>
+                </Link>
+              )
+            )}
           </div>
         </div>
       </div>

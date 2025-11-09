@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Target, Clock, BookOpen, TrendingUp, Plus, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -8,36 +9,45 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { useToast } from '@/components/ui/use-toast'
+import { useStore } from '@/lib/store'
+import { getCurrentUser } from '@/lib/supabase'
+import { api } from '@/lib/api'
 
-// For now, we'll use localStorage to track created plans
-// In production, this would come from a user-specific API endpoint
 interface DashboardPlan {
-  id: string
+  plan_id: string
   goal: string
-  time_budget_hours: number
-  progress: number
-  lessons_completed: number
-  lessons_total: number
+  total_hours: number
+  estimated_weeks: number
   created_at: string
+  updated_at: string
 }
 
 export default function DashboardPage() {
+  const router = useRouter()
+  const { user, setUser } = useStore()
   const [plans, setPlans] = useState<DashboardPlan[]>([])
   const [loading, setLoading] = useState(true)
   const { toast } = useToast()
 
   useEffect(() => {
-    loadPlans()
+    loadUserAndPlans()
   }, [])
 
-  const loadPlans = () => {
+  const loadUserAndPlans = async () => {
     try {
-      // Get plans from localStorage
-      const storedPlans = localStorage.getItem('user_plans')
-      if (storedPlans) {
-        const parsedPlans = JSON.parse(storedPlans)
-        setPlans(parsedPlans)
+      // Check if user is authenticated
+      const currentUser = await getCurrentUser()
+      if (!currentUser) {
+        // Not authenticated, redirect to auth
+        router.push('/auth')
+        return
       }
+      
+      setUser(currentUser)
+      
+      // Load user's plans from backend
+      const userPlans = await api.getUserPlans(currentUser.id)
+      setPlans(userPlans)
     } catch (error) {
       console.error('Error loading plans:', error)
       toast({
@@ -52,9 +62,9 @@ export default function DashboardPage() {
 
   const stats = {
     total_plans: plans.length,
-    completed_plans: plans.filter(p => p.progress === 100).length,
-    total_hours: plans.reduce((acc, p) => acc + p.time_budget_hours, 0),
-    completed_lessons: plans.reduce((acc, p) => acc + p.lessons_completed, 0),
+    completed_plans: 0, // TODO: Track completion status
+    total_hours: plans.reduce((acc, p) => acc + (p.total_hours || 0), 0),
+    estimated_weeks: plans.reduce((acc, p) => acc + (p.estimated_weeks || 0), 0),
   }
 
   if (loading) {
@@ -116,28 +126,26 @@ export default function DashboardPage() {
 
           <Card>
             <CardHeader className="pb-3">
-              <CardDescription>Lessons Completed</CardDescription>
-              <CardTitle className="text-3xl">{stats.completed_lessons}</CardTitle>
+              <CardDescription>Estimated Weeks</CardDescription>
+              <CardTitle className="text-3xl">{stats.estimated_weeks}</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <BookOpen className="h-4 w-4" />
-                <span>Keep learning!</span>
+                <span>Total duration</span>
               </div>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="pb-3">
-              <CardDescription>Avg Progress</CardDescription>
-              <CardTitle className="text-3xl">
-                {Math.round(plans.reduce((acc, p) => acc + p.progress, 0) / plans.length)}%
-              </CardTitle>
+              <CardDescription>Completed Plans</CardDescription>
+              <CardTitle className="text-3xl">{stats.completed_plans}</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <TrendingUp className="h-4 w-4" />
-                <span>Across all plans</span>
+                <span>Keep learning!</span>
               </div>
             </CardContent>
           </Card>
@@ -168,7 +176,7 @@ export default function DashboardPage() {
           ) : (
             <div className="grid gap-4">
               {plans.map((plan) => (
-                <Card key={plan.id} className="hover:shadow-lg transition-shadow">
+                <Card key={plan.plan_id} className="hover:shadow-lg transition-shadow">
                   <CardHeader>
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
@@ -178,45 +186,31 @@ export default function DashboardPage() {
                         </CardDescription>
                       </div>
                       <Badge variant="secondary">
-                        {plan.progress}% complete
+                        {plan.estimated_weeks} weeks
                       </Badge>
                     </div>
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-4">
-                      {/* Progress Bar */}
-                      <div>
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-sm font-medium">Progress</span>
-                          <span className="text-sm text-muted-foreground">
-                            {plan.lessons_completed}/{plan.lessons_total} lessons
-                          </span>
-                        </div>
-                        <Progress value={plan.progress} className="h-2" />
-                      </div>
-
                       {/* Meta Info */}
                       <div className="flex items-center gap-4 text-sm text-muted-foreground">
                         <div className="flex items-center gap-1">
                           <Clock className="h-4 w-4" />
-                          <span>{plan.time_budget_hours} hours</span>
+                          <span>{Math.round(plan.total_hours)} hours</span>
                         </div>
                         <div className="flex items-center gap-1">
-                          <BookOpen className="h-4 w-4" />
-                          <span>{plan.lessons_total} lessons</span>
+                          <Target className="h-4 w-4" />
+                          <span>{plan.estimated_weeks} weeks</span>
                         </div>
                       </div>
 
                       {/* Actions */}
                       <div className="flex gap-2 pt-2">
-                        <Link href={`/plan/${plan.id}`} className="flex-1">
+                        <Link href={`/plan/${plan.plan_id}`} className="flex-1">
                           <Button variant="default" className="w-full">
-                            Continue Learning
+                            View Plan
                           </Button>
                         </Link>
-                        <Button variant="outline">
-                          Share
-                        </Button>
                       </div>
                     </div>
                   </CardContent>

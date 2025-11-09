@@ -19,6 +19,7 @@ type PlanRequest struct {
 	TimeBudgetHours int      `json:"time_budget_hours" binding:"required,gt=0"`
 	HoursPerWeek    int      `json:"hours_per_week" binding:"required,gt=0"`
 	Preferences     map[string]interface{} `json:"preferences,omitempty"`
+	UserID          string   `json:"user_id,omitempty"`
 }
 
 // ReplanRequest represents the replan request
@@ -311,5 +312,86 @@ func Replan(cfg *config.Config) gin.HandlerFunc {
 
 		// Return response
 		c.JSON(http.StatusOK, replanResp)
+	}
+}
+
+// GetUserPlans handles GET /api/plan/user/:user_id/plans
+func GetUserPlans(cfg *config.Config) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userID := c.Param("user_id")
+		
+		if userID == "" {
+			c.JSON(http.StatusBadRequest, ErrorResponse{
+				Error:   "invalid_request",
+				Message: "user_id is required",
+			})
+			return
+		}
+
+		// Forward request to Planner service
+		plannerURL := fmt.Sprintf("%s/user/%s/plans", cfg.PlannerServiceURL, userID)
+		
+		// Create HTTP request
+		httpReq, err := http.NewRequestWithContext(
+			c.Request.Context(),
+			http.MethodGet,
+			plannerURL,
+			nil,
+		)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, ErrorResponse{
+				Error:   "internal_error",
+				Message: "Failed to create request",
+			})
+			return
+		}
+
+		// Forward request
+		client := &http.Client{Timeout: 30 * time.Second}
+		resp, err := client.Do(httpReq)
+		if err != nil {
+			c.JSON(http.StatusServiceUnavailable, ErrorResponse{
+				Error:   "service_unavailable",
+				Message: "Planner service is unavailable",
+			})
+			return
+		}
+		defer resp.Body.Close()
+
+		// Read response
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, ErrorResponse{
+				Error:   "internal_error",
+				Message: "Failed to read response",
+			})
+			return
+		}
+
+		// Check status code
+		if resp.StatusCode != http.StatusOK {
+			var errResp ErrorResponse
+			if err := json.Unmarshal(body, &errResp); err == nil {
+				c.JSON(resp.StatusCode, errResp)
+			} else {
+				c.JSON(resp.StatusCode, ErrorResponse{
+					Error:   "planner_service_error",
+					Message: string(body),
+				})
+			}
+			return
+		}
+
+		// Parse and return response
+		var plansResp map[string]interface{}
+		if err := json.Unmarshal(body, &plansResp); err != nil {
+			c.JSON(http.StatusInternalServerError, ErrorResponse{
+				Error:   "internal_error",
+				Message: "Failed to parse response",
+			})
+			return
+		}
+
+		c.JSON(http.StatusOK, plansResp)
 	}
 }

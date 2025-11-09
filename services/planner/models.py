@@ -13,6 +13,7 @@ class PlanRequest(BaseModel):
     time_budget_hours: int = Field(..., gt=0, le=1000, description="Total time budget in hours")
     hours_per_week: int = Field(..., gt=0, le=168, description="Hours available per week")
     preferences: Optional[dict] = Field(None, description="Learning preferences (media types, providers, etc.)")
+    user_id: Optional[str] = Field(None, description="User ID for plan ownership")
 
 
 class ResourceItem(BaseModel):

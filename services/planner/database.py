@@ -111,6 +111,23 @@ class DatabaseClient:
             self.conn.rollback()
             return None
     
+    def get_plans_by_user(self, user_id: str) -> List[Dict[str, Any]]:
+        """Retrieve all plans for a user"""
+        try:
+            with self.conn.cursor() as cur:
+                cur.execute("""
+                    SELECT plan_id, user_id, goal, total_hours, estimated_weeks, created_at, updated_at
+                    FROM learning_plans 
+                    WHERE user_id = %s
+                    ORDER BY created_at DESC
+                """, (user_id,))
+                results = cur.fetchall()
+                return [dict(row) for row in results]
+        except Exception as e:
+            logger.error(f"Error fetching plans for user {user_id}: {e}")
+            self.conn.rollback()
+            return []
+    
     def update_plan(
         self,
         plan_id: str,

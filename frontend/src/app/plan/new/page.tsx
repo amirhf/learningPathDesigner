@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Target, Clock, BookOpen, Loader2, Plus, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -10,10 +10,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { api } from '@/lib/api'
 import { useToast } from '@/components/ui/use-toast'
+import { useStore } from '@/lib/store'
+import { getCurrentUser } from '@/lib/supabase'
 
 export default function NewPlanPage() {
   const router = useRouter()
   const { toast } = useToast()
+  const { user, setUser } = useStore()
   
   const [goal, setGoal] = useState('')
   const [timeBudget, setTimeBudget] = useState(10)
@@ -21,6 +24,23 @@ export default function NewPlanPage() {
   const [prerequisites, setPrerequisites] = useState<string[]>([])
   const [prerequisiteInput, setPrerequisiteInput] = useState('')
   const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    const loadUser = async () => {
+      try {
+        const currentUser = await getCurrentUser()
+        if (currentUser) {
+          setUser(currentUser)
+          console.log('User loaded:', currentUser.id)
+        } else {
+          console.log('No user found')
+        }
+      } catch (error) {
+        console.error('Error loading user:', error)
+      }
+    }
+    loadUser()
+  }, [setUser])
 
   const addPrerequisite = () => {
     if (prerequisiteInput.trim() && !prerequisites.includes(prerequisiteInput.trim())) {
@@ -56,25 +76,15 @@ export default function NewPlanPage() {
 
     setLoading(true)
     try {
-      const plan = await api.createPlan(goal, timeBudget, hoursPerWeek, prerequisites)
-      
-      // Save plan to localStorage for dashboard
-      try {
-        const storedPlans = localStorage.getItem('user_plans')
-        const plans = storedPlans ? JSON.parse(storedPlans) : []
-        plans.push({
-          id: plan.id,
-          goal: plan.goal,
-          time_budget_hours: plan.time_budget_hours,
-          progress: 0,
-          lessons_completed: 0,
-          lessons_total: plan.lessons.length,
-          created_at: new Date().toISOString(),
-        })
-        localStorage.setItem('user_plans', JSON.stringify(plans))
-      } catch (storageError) {
-        console.error('Failed to save to localStorage:', storageError)
-      }
+      // Pass user_id if user is authenticated
+      console.log('Creating plan with user_id:', user?.id)
+      const plan = await api.createPlan(
+        goal, 
+        timeBudget, 
+        hoursPerWeek, 
+        prerequisites,
+        user?.id
+      )
       
       toast({
         title: 'Plan Created!',
