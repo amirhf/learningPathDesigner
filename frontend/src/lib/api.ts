@@ -33,36 +33,52 @@ export interface Lesson {
 }
 
 export interface Quiz {
-  id: string
-  title: string
+  quiz_id: string
+  title?: string
   questions: Question[]
+  total_questions: number
 }
 
 export interface Question {
-  id: string
-  question: string
-  options: string[]
-  correct_answer: number
+  question_id: string
+  question_text: string
+  options: QuizOption[]
   explanation: string
+  source_resource_id: string
   citation: string
+}
+
+export interface QuizOption {
+  option_id: string
+  text: string
+  is_correct?: boolean
+}
+
+export interface QuizAnswer {
+  question_id: string
+  selected_option_id: string
 }
 
 export interface QuizSubmission {
   quiz_id: string
-  answers: Record<string, number>
+  answers: QuizAnswer[]
 }
 
 export interface QuizResult {
+  quiz_id: string
   score: number
-  total: number
-  percentage: number
-  results: Array<{
-    question_id: string
-    correct: boolean
-    user_answer: number
-    correct_answer: number
-    explanation: string
-  }>
+  total_questions: number
+  correct_answers: number
+  results: QuestionResult[]
+}
+
+export interface QuestionResult {
+  question_id: string
+  correct: boolean
+  selected_option_id: string
+  correct_option_id: string
+  explanation: string
+  citation: string
 }
 
 class APIClient {
@@ -182,13 +198,19 @@ class APIClient {
     resourceIds: string[],
     numQuestions: number = 5
   ): Promise<Quiz> {
-    return this.request<Quiz>('/api/quiz/generate', {
+    const response = await this.request<Quiz>('/api/quiz/generate', {
       method: 'POST',
       body: JSON.stringify({
         resource_ids: resourceIds,
         num_questions: numQuestions,
       }),
     })
+    
+    // Add default title if missing
+    return {
+      ...response,
+      title: response.title || 'Learning Quiz'
+    }
   }
 
   async submitQuiz(submission: QuizSubmission): Promise<QuizResult> {

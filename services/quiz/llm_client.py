@@ -123,6 +123,12 @@ Generate exactly {num_questions} questions.
     ) -> List[Dict[str, Any]]:
         """Parse LLM response into structured quiz questions"""
         
+        if not response_text or not response_text.strip():
+            logger.error("Empty response from LLM")
+            return []
+        
+        logger.debug(f"LLM response (first 500 chars): {response_text[:500]}")
+        
         # Extract JSON from response
         json_match = re.search(r'```json\s*(.*?)\s*```', response_text, re.DOTALL)
         if json_match:
@@ -144,6 +150,7 @@ Generate exactly {num_questions} questions.
             
         except json.JSONDecodeError as e:
             logger.error(f"Failed to parse quiz JSON: {e}")
+            logger.error(f"Attempted to parse: {json_text[:200]}")
             return []
     
     def health_check(self) -> bool:

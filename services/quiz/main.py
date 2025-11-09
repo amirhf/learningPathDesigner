@@ -182,6 +182,12 @@ async def generate_quiz(request: QuizGenerateRequest):
                 citation=q.get('citation', 'No citation provided')
             ))
         
+        # Generate quiz title
+        if len(resources) == 1:
+            quiz_title = f"Quiz: {resources[0]['title']}"
+        else:
+            quiz_title = f"Quiz: {len(resources)} Resources"
+        
         # Save quiz to database
         db_client.save_quiz(
             quiz_id=quiz_id,
@@ -191,6 +197,7 @@ async def generate_quiz(request: QuizGenerateRequest):
         
         return QuizResponse(
             quiz_id=quiz_id,
+            title=quiz_title,
             questions=questions,
             total_questions=len(questions)
         )

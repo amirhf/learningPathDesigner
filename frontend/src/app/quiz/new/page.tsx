@@ -17,7 +17,7 @@ export default function QuizPage() {
   const { toast } = useToast()
   
   const [quiz, setQuiz] = useState<Quiz | null>(null)
-  const [answers, setAnswers] = useState<Record<string, number>>({})
+  const [answers, setAnswers] = useState<Record<string, string>>({})
   const [result, setResult] = useState<QuizResult | null>(null)
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
@@ -55,15 +55,15 @@ export default function QuizPage() {
     }
   }
 
-  const handleAnswerSelect = (questionId: string, optionIndex: number) => {
+  const handleAnswerSelect = (questionId: string, optionId: string) => {
     if (result) return // Don't allow changes after submission
-    setAnswers({ ...answers, [questionId]: optionIndex })
+    setAnswers({ ...answers, [questionId]: optionId })
   }
 
   const handleSubmit = async () => {
     if (!quiz) return
 
-    const unanswered = quiz.questions.filter(q => answers[q.id] === undefined)
+    const unanswered = quiz.questions.filter(q => !answers[q.question_id])
     if (unanswered.length > 0) {
       toast({
         title: 'Incomplete Quiz',
@@ -75,15 +75,21 @@ export default function QuizPage() {
 
     setSubmitting(true)
     try {
+      const quizAnswers = Object.entries(answers).map(([question_id, selected_option_id]) => ({
+        question_id,
+        selected_option_id
+      }))
+
       const quizResult = await api.submitQuiz({
-        quiz_id: quiz.id,
-        answers,
+        quiz_id: quiz.quiz_id,
+        answers: quizAnswers,
       })
       setResult(quizResult)
       
+      const percentage = Math.round((quizResult.correct_answers / quizResult.total_questions) * 100)
       toast({
         title: 'Quiz Submitted!',
-        description: `You scored ${quizResult.score}/${quizResult.total} (${Math.round(quizResult.percentage)}%)`,
+        description: `You scored ${quizResult.correct_answers}/${quizResult.total_questions} (${percentage}%)`,
       })
     } catch (error) {
       toast({
@@ -130,7 +136,7 @@ export default function QuizPage() {
       <div className="max-w-3xl mx-auto">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-4xl font-bold mb-4">{quiz.title}</h1>
+          <h1 className="text-4xl font-bold mb-4">{quiz.title || 'Learning Quiz'}</h1>
           <div className="flex gap-4">
             <Badge variant="secondary" className="gap-2">
               <BookOpen className="h-4 w-4" />
@@ -138,10 +144,10 @@ export default function QuizPage() {
             </Badge>
             {result && (
               <Badge
-                variant={result.percentage >= 70 ? 'default' : 'destructive'}
+                variant={((result.correct_answers / result.total_questions) * 100) >= 70 ? 'default' : 'destructive'}
                 className="gap-2"
               >
-                Score: {result.score}/{result.total} ({Math.round(result.percentage)}%)
+                Score: {result.correct_answers}/{result.total_questions} ({Math.round((result.correct_answers / result.total_questions) * 100)}%)
               </Badge>
             )}
           </div>
@@ -150,14 +156,14 @@ export default function QuizPage() {
         {/* Questions */}
         <div className="space-y-6">
           {quiz.questions.map((question, qIndex) => {
-            const userAnswer = answers[question.id]
-            const questionResult = result?.results.find(r => r.question_id === question.id)
+            const userAnswer = answers[question.question_id]
+            const questionResult = result?.results.find(r => r.question_id === question.question_id)
             const isCorrect = questionResult?.correct
             const showResult = result !== null
 
             return (
               <Card
-                key={question.id}
+                key={question.question_id}
                 className={cn(
                   showResult && (isCorrect ? 'border-green-500' : 'border-red-500')
                 )}
@@ -169,7 +175,7 @@ export default function QuizPage() {
                     </Badge>
                     <div className="flex-1">
                       <CardTitle className="text-lg mb-2">
-                        {question.question}
+                        {question?.question_text || 'No question text'}
                       </CardTitle>
                       {showResult && (
                         <div className="flex items-center gap-2 mt-2">
@@ -191,16 +197,16 @@ export default function QuizPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-2 mb-4">
-                    {question.options.map((option, oIndex) => {
-                      const isSelected = userAnswer === oIndex
-                      const isCorrectOption = oIndex === question.correct_answer
+                    {question.options.map((option) => {
+                      const isSelected = userAnswer === option.option_id
+                      const isCorrectOption = questionResult?.correct_option_id === option.option_id
                       const showCorrect = showResult && isCorrectOption
                       const showWrong = showResult && isSelected && !isCorrect
 
                       return (
                         <button
-                          key={oIndex}
-                          onClick={() => handleAnswerSelect(question.id, oIndex)}
+                          key={option.option_id}
+                          onClick={() => handleAnswerSelect(question.question_id, option.option_id)}
                           disabled={showResult}
                           className={cn(
                             'w-full text-left p-4 rounded-lg border transition-colors',
@@ -219,13 +225,13 @@ export default function QuizPage() {
                               showWrong && 'border-red-500 bg-red-500 text-white',
                               !isSelected && !showResult && 'border-muted-foreground'
                             )}>
-                              {isSelected && (
+                              {isSelected && !showResult && (
                                 <div className="h-3 w-3 rounded-full bg-current" />
                               )}
                               {showCorrect && <CheckCircle2 className="h-4 w-4" />}
                               {showWrong && <XCircle className="h-4 w-4" />}
                             </div>
-                            <span className="flex-1">{option}</span>
+                            <span className="flex-1">{option?.text || 'No text'}</span>
                           </div>
                         </button>
                       )
@@ -236,9 +242,9 @@ export default function QuizPage() {
                   {showResult && (
                     <div className="mt-4 p-4 rounded-lg bg-secondary/50">
                       <h4 className="font-semibold text-sm mb-2">Explanation:</h4>
-                      <p className="text-sm mb-3">{question.explanation}</p>
+                      <p className="text-sm mb-3">{question?.explanation || 'No explanation'}</p>
                       <div className="text-xs text-muted-foreground">
-                        <strong>Source:</strong> {question.citation}
+                        <strong>Source:</strong> {question?.citation || 'No citation'}
                       </div>
                     </div>
                   )}

@@ -52,7 +52,7 @@ class DatabaseClient:
         try:
             with self.conn.cursor() as cur:
                 cur.execute(
-                    "SELECT name FROM skills WHERE skill_id = ANY(%s)",
+                    "SELECT name FROM skill WHERE id::text = ANY(%s)",
                     (skill_ids,)
                 )
                 results = cur.fetchall()

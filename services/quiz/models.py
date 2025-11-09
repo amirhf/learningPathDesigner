@@ -33,6 +33,7 @@ class QuizQuestion(BaseModel):
 class QuizResponse(BaseModel):
     """Response with generated quiz"""
     quiz_id: str
+    title: Optional[str] = Field(None, description="Quiz title")
     questions: List[QuizQuestion]
     total_questions: int
 

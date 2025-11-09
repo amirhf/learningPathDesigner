@@ -49,9 +49,9 @@ class DatabaseClient:
         try:
             with self.conn.cursor() as cur:
                 cur.execute("""
-                    SELECT resource_id, title, url, snippet_s3_key
-                    FROM resources
-                    WHERE resource_id = ANY(%s)
+                    SELECT id::text as resource_id, title, url, s3_cache_key as snippet_s3_key
+                    FROM resource
+                    WHERE id::text = ANY(%s)
                 """, (resource_ids,))
                 results = cur.fetchall()
                 return [dict(row) for row in results]
@@ -68,13 +68,17 @@ class DatabaseClient:
         """Save quiz to database"""
         try:
             with self.conn.cursor() as cur:
+                # Store in original quiz table with items JSONB field
+                quiz_data = {
+                    'resource_ids': resource_ids,
+                    'questions': questions
+                }
                 cur.execute("""
-                    INSERT INTO quizzes (quiz_id, resource_ids, questions, created_at)
-                    VALUES (%s, %s, %s, %s)
+                    INSERT INTO quiz (id, lesson_id, items, created_at)
+                    VALUES (%s, NULL, %s, %s)
                 """, (
                     quiz_id,
-                    resource_ids,
-                    psycopg2.extras.Json(questions),
+                    psycopg2.extras.Json(quiz_data),
                     datetime.utcnow()
                 ))
                 self.conn.commit()
@@ -89,11 +93,17 @@ class DatabaseClient:
         try:
             with self.conn.cursor() as cur:
                 cur.execute(
-                    "SELECT * FROM quizzes WHERE quiz_id = %s",
+                    "SELECT id, items FROM quiz WHERE id = %s",
                     (quiz_id,)
                 )
                 result = cur.fetchone()
-                return dict(result) if result else None
+                if result:
+                    # Extract questions from items JSONB
+                    return {
+                        'quiz_id': str(result['id']),
+                        'questions': result['items'].get('questions', [])
+                    }
+                return None
         except Exception as e:
             logger.error(f"Error fetching quiz: {e}")
             return None
@@ -108,9 +118,10 @@ class DatabaseClient:
         """Save quiz attempt results"""
         try:
             with self.conn.cursor() as cur:
+                # Store in original quiz_attempt table
                 cur.execute("""
-                    INSERT INTO quiz_attempts 
-                    (attempt_id, quiz_id, user_id, score, answers, created_at)
+                    INSERT INTO quiz_attempt 
+                    (id, quiz_id, user_id, score, answers, created_at)
                     VALUES (%s, %s, %s, %s, %s, %s)
                 """, (
                     str(uuid.uuid4()),

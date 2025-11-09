@@ -51,12 +51,13 @@ func main() {
 			"status":  "running",
 			"message": "Welcome to the Learning Path Designer API Gateway",
 			"endpoints": gin.H{
-				"info":   "GET /",
-				"health": "GET /health",
-				"search": "POST /api/search",
-				"plan":   "POST /api/plan",
-				"replan": "POST /api/plan/:id/replan",
-				"quiz":   "POST /api/quiz/generate (not yet proxied - use :8003 directly)",
+				"info":         "GET /",
+				"health":       "GET /health",
+				"search":       "POST /api/search",
+				"plan":         "POST /api/plan",
+				"replan":       "POST /api/plan/:id/replan",
+				"quiz_generate": "POST /api/quiz/generate",
+				"quiz_submit":   "POST /api/quiz/submit",
 			},
 			"services": gin.H{
 				"rag":     cfg.RAGServiceURL + " (port 8001)",
@@ -85,10 +86,9 @@ func main() {
 		api.GET("/plan/:id", handlers.GetPlan(cfg))
 		api.POST("/plan/:id/replan", handlers.Replan(cfg))
 		
-		// Quiz Service (proxy to quiz service)
-		api.POST("/quiz/generate", func(c *gin.Context) {
-			c.JSON(501, gin.H{"error": "Quiz endpoints not yet implemented in gateway. Use quiz service directly at :8003"})
-		})
+		// Quiz Service
+		api.POST("/quiz/generate", handlers.GenerateQuiz(cfg))
+		api.POST("/quiz/submit", handlers.SubmitQuiz(cfg))
 	}
 
 	// Start server
