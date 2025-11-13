@@ -23,7 +23,8 @@ ENV RERANKER_MODEL=BAAI/bge-reranker-base
 # Download and cache models in the image
 # This makes startup MUCH faster (2-3s vs 30-60s)
 # Models are cached once during build, quantized at runtime
-RUN python quantize_models.py
+# Commented out to avoid network timeouts during build - models will download on first run
+# RUN python quantize_models.py
 
 # Expose port
 # Local: uses port from config (8001)

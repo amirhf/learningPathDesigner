@@ -108,7 +108,7 @@ Expected output:
 ### Disable Quantization (if needed)
 
 ```bash
-# Edit .env.docker
+# Edit ..env.docker
 USE_QUANTIZATION=false
 ```
 

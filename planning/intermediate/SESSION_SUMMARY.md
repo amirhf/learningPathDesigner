@@ -261,7 +261,7 @@ curl http://localhost:8003/health
 
 1. **Configure API Keys**
    ```bash
-   # Edit .env.docker
+   # Edit ..env.docker
    OPENROUTER_API_KEY=sk-or-your-key-here
    ```
 

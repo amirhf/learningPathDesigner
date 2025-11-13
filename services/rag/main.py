@@ -68,10 +68,30 @@ app.add_middleware(
 async def health_check():
     """Health check endpoint"""
     logger.info("Health check called")
+    
+    # Check if services are initialized (lazy loading)
+    models_loaded = False
+    qdrant_connected = False
+    
+    try:
+        # Try to get embedding service to check if models are loaded
+        embedding_service = get_embedding_service()
+        models_loaded = embedding_service is not None
+    except Exception:
+        pass
+    
+    try:
+        # Try to get search service to check Qdrant connection
+        search_service = get_search_service()
+        qdrant_connected = search_service is not None
+    except Exception:
+        pass
+    
     return HealthResponse(
         status="healthy",
         service=settings.service_name,
-        version="1.0.0"
+        qdrant_connected=qdrant_connected,
+        models_loaded=models_loaded
     )
 
 

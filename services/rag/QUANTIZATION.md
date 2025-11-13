@@ -91,7 +91,7 @@ model = model.half()  # Convert to FP16
 ### Enable Quantization (Default)
 
 ```bash
-# .env.docker
+# ..env.docker
 USE_QUANTIZATION=true
 QUANTIZATION_CONFIG=int8
 ```
@@ -106,7 +106,7 @@ docker-compose restart rag-service
 For maximum accuracy (e.g., research or benchmarking):
 
 ```bash
-# .env.docker
+# ..env.docker
 USE_QUANTIZATION=false
 # or
 QUANTIZATION_CONFIG=none
