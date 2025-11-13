@@ -1,0 +1,66 @@
+# Google Cloud Build Configuration
+# Builds all Docker images in the cloud and pushes to GCR
+
+steps:
+  # Build RAG Service
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/rag-service:latest'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/rag-service:$SHORT_SHA'
+      - './services/rag'
+    id: 'build-rag'
+  
+  # Build Planner Service
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/planner-service:latest'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/planner-service:$SHORT_SHA'
+      - './services/planner'
+    id: 'build-planner'
+  
+  # Build Quiz Service
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/quiz-service:latest'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/quiz-service:$SHORT_SHA'
+      - './services/quiz'
+    id: 'build-quiz'
+  
+  # Build Gateway
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/gateway:latest'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/gateway:$SHORT_SHA'
+      - './gateway'
+    id: 'build-gateway'
+
+# Push all images to Google Container Registry
+images:
+  - 'gcr.io/$PROJECT_ID/rag-service:latest'
+  - 'gcr.io/$PROJECT_ID/rag-service:$SHORT_SHA'
+  - 'gcr.io/$PROJECT_ID/planner-service:latest'
+  - 'gcr.io/$PROJECT_ID/planner-service:$SHORT_SHA'
+  - 'gcr.io/$PROJECT_ID/quiz-service:latest'
+  - 'gcr.io/$PROJECT_ID/quiz-service:$SHORT_SHA'
+  - 'gcr.io/$PROJECT_ID/gateway:latest'
+  - 'gcr.io/$PROJECT_ID/gateway:$SHORT_SHA'
+
+# Build configuration
+options:
+  machineType: 'E2_HIGHCPU_8'  # Use powerful machine for faster builds
+  logging: CLOUD_LOGGING_ONLY
+  
+# Timeout (RAG service has large ML models)
+timeout: '1800s'  # 30 minutes

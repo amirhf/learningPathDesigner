@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     
     # Service
     service_name: str = "rag-service"
+    environment: str = "production"
     log_level: str = "info"
     port: int = 8001  # Default for local, Cloud Run overrides with PORT env var
     
