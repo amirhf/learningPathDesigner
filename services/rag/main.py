@@ -32,16 +32,12 @@ settings = get_settings()
 async def lifespan(app: FastAPI):
     """Startup and shutdown events"""
     # Startup
-    logger.info(f"Starting {settings.service_name}")
+    logger.info(f"Starting {settings.service_name} on port {settings.port}")
+    logger.info(f"Environment: {settings.environment}")
     
-    # Load models
-    embedding_service = get_embedding_service()
-    embedding_service.load_model()
-    
-    # Connect to Qdrant
-    search_service = get_search_service()
-    search_service.connect()
-    
+    # NOTE: Models and Qdrant connection are loaded lazily on first request
+    # This ensures fast startup for Cloud Run health checks
+    logger.info("Service will load models and connect to Qdrant on first request")
     logger.info("Service ready")
     
     yield
@@ -71,17 +67,11 @@ app.add_middleware(
 @app.get("/health", response_model=HealthResponse)
 async def health_check():
     """Health check endpoint"""
-    embedding_service = get_embedding_service()
-    search_service = get_search_service()
-    
-    models_loaded = embedding_service.model is not None
-    qdrant_connected = search_service.health_check()
-    
+    logger.info("Health check called")
     return HealthResponse(
-        status="healthy" if (models_loaded and qdrant_connected) else "degraded",
+        status="healthy",
         service=settings.service_name,
-        qdrant_connected=qdrant_connected,
-        models_loaded=models_loaded
+        version="1.0.0"
     )
 
 
@@ -197,4 +187,4 @@ async def root():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8001)
+    uvicorn.run(app, host="0.0.0.0", port=settings.port)

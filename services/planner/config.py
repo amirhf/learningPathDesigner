@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     """Application settings"""
     service_name: str = "planner-service"
     environment: str = "development"
+    port: int = 8002  # Default for local, Cloud Run overrides with PORT env var
     
     # Database
     database_url: str

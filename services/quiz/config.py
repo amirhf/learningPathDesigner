@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     """Application settings"""
     service_name: str = "quiz-service"
     environment: str = "development"
+    port: int = 8003  # Default for local, Cloud Run overrides with PORT env var
     
     # Database
     database_url: str

@@ -26,7 +26,10 @@ ENV RERANKER_MODEL=BAAI/bge-reranker-base
 RUN python quantize_models.py
 
 # Expose port
-EXPOSE 8001
+# Local: uses port from config (8001)
+# Cloud Run: set PORT=8080 env var to override
+EXPOSE 8001 8080
 
 # Run the application
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8001"]
+# Uses PORT env var if set, otherwise falls back to config default (8001)
+CMD ["sh", "-c", "echo 'Starting uvicorn on port '${PORT:-8001} && uvicorn main:app --host 0.0.0.0 --port ${PORT:-8001}"]

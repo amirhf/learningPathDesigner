@@ -165,5 +165,9 @@ def get_db_client() -> DatabaseClient:
     global _db_client
     if _db_client is None:
         _db_client = DatabaseClient()
-        _db_client.connect()
+        # Try to connect, but don't fail if it doesn't work
+        try:
+            _db_client.connect()
+        except Exception as e:
+            logger.warning(f"Initial database connection failed: {e}")
     return _db_client

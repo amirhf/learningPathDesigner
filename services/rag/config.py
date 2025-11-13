@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     # Service
     service_name: str = "rag-service"
     log_level: str = "info"
+    port: int = 8001  # Default for local, Cloud Run overrides with PORT env var
     
     # Database
     database_url: str = "postgresql://postgres:postgres@localhost:5432/learnpath"

@@ -18,7 +18,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Expose port
-EXPOSE 8002
+# Local: uses port from config (8002)
+# Cloud Run: set PORT=8080 env var to override
+EXPOSE 8002 8080
 
 # Run the application
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8002"]
+# Uses PORT env var if set, otherwise falls back to config default (8002)
+CMD ["sh", "-c", "echo 'Starting uvicorn on port '${PORT:-8002} && uvicorn main:app --host 0.0.0.0 --port ${PORT:-8002}"]

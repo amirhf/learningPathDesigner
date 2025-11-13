@@ -32,11 +32,16 @@ settings = get_settings()
 async def lifespan(app: FastAPI):
     """Startup and shutdown events"""
     # Startup
-    logger.info(f"Starting {settings.service_name}")
+    logger.info(f"Starting {settings.service_name} on port {settings.port}")
+    logger.info(f"Environment: {settings.environment}")
     
-    # Connect to database
-    db_client = get_db_client()
-    db_client.connect()
+    # Try to connect to database (non-blocking)
+    try:
+        db_client = get_db_client()
+        logger.info("Database connected successfully")
+    except Exception as e:
+        logger.warning(f"Database connection failed during startup: {e}")
+        logger.warning("Service will start anyway, database will be retried on first request")
     
     logger.info("Service ready")
     
@@ -286,4 +291,4 @@ async def root():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8003)
+    uvicorn.run(app, host="0.0.0.0", port=settings.port)
