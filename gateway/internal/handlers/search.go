@@ -78,6 +78,9 @@ func Search(cfg *config.Config) gin.HandlerFunc {
 		if req.RerankTopN == 0 {
 			req.RerankTopN = 5
 		}
+		// Default rerank to false to avoid timeout issues with model loading
+		// Frontend can explicitly set to true if needed
+		// Note: Rerank is currently disabled due to model loading time
 
 		// Forward request to RAG service
 		ragURL := fmt.Sprintf("%s/search", cfg.RAGServiceURL)
@@ -114,8 +117,9 @@ func Search(cfg *config.Config) gin.HandlerFunc {
 		}
 
 		// Send request
+		// Increased timeout to 60s to allow for model loading on cold start
 		client := &http.Client{
-			Timeout: 30 * time.Second,
+			Timeout: 60 * time.Second,
 		}
 		resp, err := client.Do(httpReq)
 		if err != nil {

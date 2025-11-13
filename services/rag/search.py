@@ -123,7 +123,7 @@ class SearchService:
             results = []
             for hit in search_result:
                 result = {
-                    "resource_id": hit.payload.get("resource_id"),
+                    "resource_id": hit.payload.get("resource_id") or str(hit.id),
                     "title": hit.payload.get("title"),
                     "url": hit.payload.get("url"),
                     "provider": hit.payload.get("provider"),

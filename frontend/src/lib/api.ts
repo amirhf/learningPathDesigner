@@ -120,7 +120,11 @@ class APIClient {
   async search(query: string, limit: number = 10): Promise<SearchResponse> {
     return this.request<SearchResponse>('/api/search', {
       method: 'POST',
-      body: JSON.stringify({ query, limit }),
+      body: JSON.stringify({ 
+        query, 
+        top_k: limit,
+        rerank: false // Disable reranking to avoid timeout issues
+      }),
     })
   }
 

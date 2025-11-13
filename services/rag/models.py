@@ -32,7 +32,7 @@ class SearchRequest(BaseModel):
     query: str = Field(..., min_length=1, description="Search query")
     filters: Optional[SearchFilter] = Field(None, description="Search filters")
     top_k: int = Field(default=20, ge=1, le=50, description="Number of results to return")
-    rerank: bool = Field(default=True, description="Whether to apply reranking")
+    rerank: bool = Field(default=False, description="Whether to apply reranking")
     rerank_top_n: int = Field(default=5, ge=1, le=20, description="Number of results after reranking")
 
 
