@@ -163,10 +163,10 @@ async def generate_plan(request: PlanRequest):
                 json={
                     "query": request.goal,
                     "top_k": 30,
-                    "rerank": True,
+                    "rerank": False,  # Disabled for now due to model loading time
                     "rerank_top_n": 20
                 },
-                timeout=30.0
+                timeout=60.0  # Increased timeout for model loading
             )
             search_response.raise_for_status()
             search_data = search_response.json()

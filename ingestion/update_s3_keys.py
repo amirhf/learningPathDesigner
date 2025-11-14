@@ -60,7 +60,7 @@ class DatabaseUpdater:
                 query = """
                     SELECT id, title, url, media_type, provider
                     FROM resource
-                    WHERE s3_cache_key IS NULL
+                    WHERE snippet_s3_key IS NULL
                 """
                 params = []
                 
@@ -141,7 +141,7 @@ class DatabaseUpdater:
             with self.conn.cursor() as cur:
                 cur.execute("""
                     UPDATE resource
-                    SET s3_cache_key = %s, updated_at = NOW()
+                    SET snippet_s3_key = %s, updated_at = NOW()
                     WHERE id = %s
                 """, (s3_key, resource_id))
                 
@@ -179,7 +179,7 @@ class DatabaseUpdater:
                     
                     cur.execute("""
                         UPDATE resource
-                        SET s3_cache_key = %s, updated_at = NOW()
+                        SET snippet_s3_key = %s, updated_at = NOW()
                         WHERE id = %s
                     """, (s3_key, resource_id))
                     

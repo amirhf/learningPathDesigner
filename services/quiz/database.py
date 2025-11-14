@@ -49,9 +49,12 @@ class DatabaseClient:
     def get_resource_info(self, resource_ids: List[str]) -> List[Dict[str, Any]]:
         """Get resource information from database"""
         try:
+            if not self.conn or self.conn.closed:
+                self.connect()
+            
             with self.conn.cursor() as cur:
                 cur.execute("""
-                    SELECT id::text as resource_id, title, url, s3_cache_key as snippet_s3_key
+                    SELECT id::text as resource_id, title, url, description, snippet_s3_key
                     FROM resource
                     WHERE id::text = ANY(%s)
                 """, (resource_ids,))
@@ -59,6 +62,8 @@ class DatabaseClient:
                 return [dict(row) for row in results]
         except Exception as e:
             logger.error(f"Error fetching resources: {e}")
+            # Try to reconnect
+            self.connect()
             return []
     
     def save_quiz(
