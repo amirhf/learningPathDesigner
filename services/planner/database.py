@@ -31,12 +31,29 @@ class DatabaseClient:
             logger.error(f"Database connection error: {e}")
             raise
     
+    def ensure_connection(self):
+        """Ensure database connection is active"""
+        try:
+            if not self.conn or self.conn.closed:
+                logger.info("Reconnecting to database...")
+                self.connect()
+            else:
+                # Test the connection
+                with self.conn.cursor() as cur:
+                    cur.execute("SELECT 1")
+        except Exception as e:
+            logger.warning(f"Connection test failed, reconnecting: {e}")
+            try:
+                if self.conn:
+                    self.conn.close()
+            except:
+                pass
+            self.connect()
+    
     def health_check(self) -> bool:
         """Check database connection"""
         try:
-            if not self.conn or self.conn.closed:
-                self.connect()
-            
+            self.ensure_connection()
             with self.conn.cursor() as cur:
                 cur.execute("SELECT 1")
                 return True
@@ -50,6 +67,7 @@ class DatabaseClient:
             return []
         
         try:
+            self.ensure_connection()
             with self.conn.cursor() as cur:
                 cur.execute(
                     "SELECT name FROM skill WHERE id::text = ANY(%s)",
@@ -73,6 +91,7 @@ class DatabaseClient:
         plan_id = str(uuid.uuid4())
         
         try:
+            self.ensure_connection()
             with self.conn.cursor() as cur:
                 cur.execute("""
                     INSERT INTO learning_plans 
@@ -96,8 +115,9 @@ class DatabaseClient:
             raise
     
     def get_plan(self, plan_id: str) -> Optional[Dict[str, Any]]:
-        """Retrieve a learning plan"""
+        """Retrieve a plan by ID"""
         try:
+            self.ensure_connection()
             with self.conn.cursor() as cur:
                 cur.execute(
                     "SELECT * FROM learning_plans WHERE plan_id = %s",
@@ -114,6 +134,7 @@ class DatabaseClient:
     def get_plans_by_user(self, user_id: str) -> List[Dict[str, Any]]:
         """Retrieve all plans for a user"""
         try:
+            self.ensure_connection()
             with self.conn.cursor() as cur:
                 cur.execute("""
                     SELECT plan_id, user_id, goal, total_hours, estimated_weeks, created_at, updated_at
@@ -137,6 +158,7 @@ class DatabaseClient:
     ):
         """Update an existing plan"""
         try:
+            self.ensure_connection()
             with self.conn.cursor() as cur:
                 cur.execute("""
                     UPDATE learning_plans 

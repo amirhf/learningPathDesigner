@@ -414,7 +414,13 @@ async def ingest_resources(request: IngestResourcesRequest):
     """
     Ingest resources into the database and optionally generate embeddings
     """
-    conn = get_db_connection()
+    try:
+        conn = get_db_connection()
+        logger.info(f"Database connection established for ingesting {len(request.resources)} resources")
+    except Exception as e:
+        logger.error(f"Failed to connect to database: {e}")
+        raise HTTPException(status_code=500, detail=f"Database connection failed: {str(e)}")
+    
     success_count = 0
     failed_count = 0
     errors = []
@@ -438,6 +444,7 @@ async def ingest_resources(request: IngestResourcesRequest):
                             logger.warning(f"Skill slug '{slug}' not found for resource {resource.title}")
                     
                     # Insert resource into PostgreSQL
+                    logger.info(f"Inserting resource: {resource.title} (URL: {resource.url})")
                     cur.execute("""
                         INSERT INTO resource (
                             id, title, url, provider, license, duration_min,
@@ -471,6 +478,7 @@ async def ingest_resources(request: IngestResourcesRequest):
                     result = cur.fetchone()
                     if result:
                         resource_id = str(result['id'])
+                        logger.info(f"Resource inserted/updated with ID: {resource_id}")
                     
                     # Extract content and upload to S3 if requested
                     if request.extract_content:
@@ -504,7 +512,8 @@ async def ingest_resources(request: IngestResourcesRequest):
                             
                             # Store in Qdrant
                             search_service = get_search_service()
-                            search_service.qdrant_client.upsert(
+                            search_service.connect()  # Ensure connection is established
+                            search_service.client.upsert(
                                 collection_name=settings.qdrant_collection,
                                 points=[{
                                     "id": resource_id,
@@ -537,11 +546,17 @@ async def ingest_resources(request: IngestResourcesRequest):
                     errors.append(f"Failed to insert resource {resource.url}: {str(e)}")
                     logger.error(f"Failed to insert resource {resource.url}: {e}")
             
+            logger.info(f"Committing transaction for {success_count} resources")
             conn.commit()
+            logger.info("Transaction committed successfully")
             
     except Exception as e:
-        conn.rollback()
-        logger.error(f"Transaction failed: {e}")
+        logger.error(f"Transaction failed: {e}", exc_info=True)
+        try:
+            conn.rollback()
+            logger.info("Transaction rolled back")
+        except Exception as rollback_error:
+            logger.error(f"Rollback failed: {rollback_error}")
         raise HTTPException(status_code=500, detail=f"Ingestion failed: {str(e)}")
     finally:
         conn.close()

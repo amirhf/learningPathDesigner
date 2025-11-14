@@ -33,12 +33,29 @@ class DatabaseClient:
             self.conn = None
             return False
     
+    def ensure_connection(self):
+        """Ensure database connection is active"""
+        try:
+            if not self.conn or self.conn.closed:
+                logger.info("Reconnecting to database...")
+                self.connect()
+            else:
+                # Test the connection
+                with self.conn.cursor() as cur:
+                    cur.execute("SELECT 1")
+        except Exception as e:
+            logger.warning(f"Connection test failed, reconnecting: {e}")
+            try:
+                if self.conn:
+                    self.conn.close()
+            except:
+                pass
+            self.connect()
+    
     def health_check(self) -> bool:
         """Check database connection"""
         try:
-            if not self.conn or self.conn.closed:
-                self.connect()
-            
+            self.ensure_connection()
             with self.conn.cursor() as cur:
                 cur.execute("SELECT 1")
                 return True
@@ -49,9 +66,7 @@ class DatabaseClient:
     def get_resource_info(self, resource_ids: List[str]) -> List[Dict[str, Any]]:
         """Get resource information from database"""
         try:
-            if not self.conn or self.conn.closed:
-                self.connect()
-            
+            self.ensure_connection()
             with self.conn.cursor() as cur:
                 cur.execute("""
                     SELECT id::text as resource_id, title, url, description, snippet_s3_key
@@ -74,6 +89,7 @@ class DatabaseClient:
     ):
         """Save quiz to database"""
         try:
+            self.ensure_connection()
             with self.conn.cursor() as cur:
                 # Store in original quiz table with items JSONB field
                 quiz_data = {
