@@ -2,6 +2,8 @@
 
 AI-powered learning path generator with RAG-based resource curation, adaptive planning, and grounded quizzes.
 
+Live demo: https://learning-path-designer-git-main-amir-firouzs-projects.vercel.app
+
 ## Features
 
 - 🔍 **RAG-Powered Search** - Semantic search with e5-base embeddings and reranking
