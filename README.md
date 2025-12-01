@@ -1,16 +1,32 @@
-# Learning Path Designer
+# Learning Path Designer – Agentic Workflow Orchestrator
 
-AI-powered learning path generator with RAG-based resource curation, adaptive planning, and grounded quizzes.
+**Structured RAG + Planner–Executor agents in Go + Python**
 
 Live demo: https://learning-path-designer-git-main-amir-firouzs-projects.vercel.app
 
-## Features
+## Why this exists
 
-- 🔍 **RAG-Powered Search** - Semantic search with e5-base embeddings and reranking
-- 🎯 **AI Plan Generation** - LLM-based learning plans respecting prerequisites and time budgets
-- 📝 **Grounded Quizzes** - Auto-generated quizzes with 100% citation requirement
-- 🔄 **Adaptive Replanning** - Dynamic schedule adjustment based on progress
-- 🔗 **Shareable Plans** - Public read-only links for portfolio sharing
+This repo is a **reference architecture** for building production-ready AI agents. It demonstrates how to move beyond toy demos to a robust, distributed system featuring:
+
+*   **Go gateway** coordinating multiple AI microservices.
+*   **RAG** over domain content with Qdrant + Postgres.
+*   **Deterministic planner & quiz generator** using structured outputs.
+*   **Ready to adapt** to any domain: onboarding, internal training, certification prep.
+
+## Agent Patterns Implemented
+
+*   **Planner–Executor**: Planner proposes a path; executor decomposes into concrete steps with resources.
+*   **RAG + Re-ranking pipeline**: Semantic search (e5-base) → Reranking (bge-reranker) → Context window construction.
+*   **Structured JSON outputs**: All plans & quizzes are strictly validated against schemas.
+*   **Multi-service Orchestration**: Frontend (Next.js) → Go Gateway → Python AI microservices → Qdrant + Postgres.
+
+## Reference Architecture
+
+This project is designed to be forked and adapted. It serves as a blueprint for:
+
+*   **Internal L&D Teams:** Create personalized onboarding paths from your internal wikis and PDFs.
+*   **EdTech Startups:** Build adaptive learning platforms with grounded assessments.
+*   **AI Engineers:** See a working example of Go-based agent orchestration handling Python ML services.
 
 ## Architecture
 

@@ -8,7 +8,10 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/amirhf/learnpath-gateway/internal/common"
 	"github.com/amirhf/learnpath-gateway/internal/config"
+	"github.com/amirhf/learnpath-gateway/internal/models"
+	"github.com/amirhf/learnpath-gateway/internal/orchestrator"
 	"github.com/gin-gonic/gin"
 )
 
@@ -16,7 +19,7 @@ import (
 type QuizGenerateRequest struct {
 	ResourceIDs  []string `json:"resource_ids" binding:"required,min=1"`
 	NumQuestions int      `json:"num_questions,omitempty"`
-	Difficulty   *string  `json:"difficulty,omitempty"`
+	Difficulty   string   `json:"difficulty,omitempty"`
 }
 
 // QuizSubmitRequest represents quiz submission
@@ -31,8 +34,8 @@ type QuizAnswer struct {
 	SelectedOptionID string `json:"selected_option_id"`
 }
 
-// GenerateQuiz proxies quiz generation to quiz service
-func GenerateQuiz(cfg *config.Config) gin.HandlerFunc {
+// GenerateQuiz uses the orchestrator to generate a quiz
+func GenerateQuiz(cfg *config.Config, orch orchestrator.Orchestrator) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req QuizGenerateRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
@@ -47,10 +50,34 @@ func GenerateQuiz(cfg *config.Config) gin.HandlerFunc {
 		if req.NumQuestions == 0 {
 			req.NumQuestions = 5
 		}
+		if req.Difficulty == "" {
+			req.Difficulty = "medium"
+		}
 
-		// Forward to quiz service
-		quizURL := fmt.Sprintf("%s/generate", cfg.QuizServiceURL)
-		proxyRequest(c, quizURL, req, 60*time.Second)
+		// Propagate Request ID to context
+		ctx := c.Request.Context()
+		if requestID := c.GetString("request_id"); requestID != "" {
+			ctx = common.WithRequestID(ctx, requestID)
+		}
+
+		// Use Orchestrator
+		orchReq := models.GenerateQuizRequest{
+			ResourceIDs:  req.ResourceIDs,
+			NumQuestions: req.NumQuestions,
+			Difficulty:   req.Difficulty,
+			// UserID from auth middleware if available, otherwise empty/nil
+		}
+
+		quiz, err := orch.GenerateQuiz(ctx, orchReq)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, ErrorResponse{
+				Error:   "quiz_generation_error",
+				Message: err.Error(),
+			})
+			return
+		}
+
+		c.JSON(http.StatusOK, quiz)
 	}
 }
 

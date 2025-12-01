@@ -7,6 +7,7 @@ import (
 	"github.com/amirhf/learnpath-gateway/internal/config"
 	"github.com/amirhf/learnpath-gateway/internal/handlers"
 	"github.com/amirhf/learnpath-gateway/internal/middleware"
+	"github.com/amirhf/learnpath-gateway/internal/orchestrator"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
@@ -26,6 +27,11 @@ func main() {
 		gin.SetMode(gin.ReleaseMode)
 	}
 
+	// Initialize Orchestrator
+	// Note: config.Config needs to be checked if it has these exact field names.
+	// Assuming config has RAGServiceURL, PlannerServiceURL, QuizServiceURL based on previous file reads.
+	orch := orchestrator.NewOrchestrator(cfg.RAGServiceURL, cfg.PlannerServiceURL, cfg.QuizServiceURL)
+
 	// Create router
 	r := gin.Default()
 
@@ -33,7 +39,7 @@ func main() {
 	corsConfig := cors.DefaultConfig()
 	corsConfig.AllowAllOrigins = true
 	corsConfig.AllowMethods = []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}
-	corsConfig.AllowHeaders = []string{"Origin", "Content-Type", "Authorization", "Accept"}
+	corsConfig.AllowHeaders = []string{"Origin", "Content-Type", "Authorization", "Accept", "X-Request-ID"}
 	corsConfig.ExposeHeaders = []string{"Content-Length"}
 	corsConfig.AllowCredentials = false // Must be false when AllowAllOrigins is true
 	r.Use(cors.New(corsConfig))
@@ -82,13 +88,14 @@ func main() {
 		api.POST("/search", handlers.Search(cfg))
 		
 		// Planner Service
-		api.POST("/plan", handlers.CreatePlan(cfg))
+		// Passing orchestrator to CreatePlan. Other handlers might just use config for now or need updating.
+		api.POST("/plan", handlers.CreatePlan(cfg, orch))
 		api.GET("/plan/:id", handlers.GetPlan(cfg))
 		api.GET("/plan/user/:user_id/plans", handlers.GetUserPlans(cfg))
 		api.POST("/plan/:id/replan", handlers.Replan(cfg))
 		
 		// Quiz Service
-		api.POST("/quiz/generate", handlers.GenerateQuiz(cfg))
+		api.POST("/quiz/generate", handlers.GenerateQuiz(cfg, orch))
 		api.POST("/quiz/submit", handlers.SubmitQuiz(cfg))
 	}
 
