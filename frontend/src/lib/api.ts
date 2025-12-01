@@ -165,11 +165,14 @@ class APIClient {
   }
   
   private transformPlanResponse(response: any): LearningPlan {
+    // Handle wrapped response from orchestrator
+    const planData = response.learning_path || response
+
     return {
-      id: response.plan_id,
-      goal: response.goal,
-      time_budget_hours: response.total_hours || 0,
-      lessons: (response.milestones || []).map((milestone: any) => ({
+      id: planData.plan_id,
+      goal: planData.goal,
+      time_budget_hours: planData.total_hours || 0,
+      lessons: (planData.milestones || []).map((milestone: any) => ({
         id: milestone.milestone_id,
         title: milestone.title,
         description: milestone.description,

@@ -2,12 +2,34 @@
 LLM client for plan generation using OpenRouter
 """
 import logging
-from typing import List, Dict, Any
+import json
+import re
+from typing import List, Dict, Any, Optional
 from openai import OpenAI
+from pydantic import BaseModel, Field, ValidationError
 from config import get_settings
 
 logger = logging.getLogger(__name__)
 
+# --- Pydantic Models for LLM Validation ---
+
+class LLMResource(BaseModel):
+    resource_id: str
+    why_included: str
+    order: int
+
+class LLMMilestone(BaseModel):
+    title: str
+    description: str
+    resources: List[LLMResource]
+    skills_gained: List[str]
+    order: int
+
+class LLMPlanResponse(BaseModel):
+    milestones: List[LLMMilestone]
+    reasoning: str
+
+# ------------------------------------------
 
 class LLMClient:
     """Client for interacting with LLM via OpenRouter"""
@@ -29,7 +51,7 @@ class LLMClient:
         preferences: Dict[str, Any] = None
     ) -> Dict[str, Any]:
         """
-        Generate a learning plan using LLM
+        Generate a learning plan using LLM with retries and validation
         
         Args:
             goal: Learning goal description
@@ -43,37 +65,62 @@ class LLMClient:
             Structured plan as dict
         """
         # Build prompt
-        prompt = self._build_plan_prompt(
+        initial_prompt = self._build_plan_prompt(
             goal, current_skills, available_resources,
             time_budget_hours, hours_per_week, preferences
         )
         
-        try:
-            response = self.client.chat.completions.create(
-                model=self.settings.default_model,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You are an expert learning path designer. Create structured, achievable learning plans that respect prerequisites and time constraints."
-                    },
-                    {
-                        "role": "user",
-                        "content": prompt
-                    }
-                ],
-                temperature=0.7,
-                max_tokens=4000,
-            )
-            
-            plan_text = response.choices[0].message.content
-            logger.info(f"Generated plan for goal: {goal[:50]}...")
-            
-            # Parse the response (in production, use structured output or JSON mode)
-            return self._parse_plan_response(plan_text, available_resources)
-            
-        except Exception as e:
-            logger.error(f"LLM generation error: {e}")
-            raise
+        messages = [
+            {
+                "role": "system",
+                "content": "You are an expert learning path designer. Create structured, achievable learning plans that respect prerequisites and time constraints."
+            },
+            {
+                "role": "user",
+                "content": initial_prompt
+            }
+        ]
+        
+        max_retries = 3
+        last_error = None
+        
+        for attempt in range(max_retries):
+            try:
+                logger.info(f"LLM generation attempt {attempt + 1}/{max_retries}")
+                
+                response = self.client.chat.completions.create(
+                    model=self.settings.default_model,
+                    messages=messages,
+                    temperature=0.7,
+                    max_tokens=4000,
+                )
+                
+                plan_text = response.choices[0].message.content
+                
+                # Parse and Validate
+                validated_plan = self._parse_and_validate_response(plan_text)
+                
+                # If successful, enrich with resource data and return
+                return self._enrich_plan_data(validated_plan, available_resources)
+                
+            except (json.JSONDecodeError, ValidationError) as e:
+                logger.warning(f"Validation failed on attempt {attempt + 1}: {e}")
+                last_error = e
+                
+                # Add error feedback to messages for next attempt
+                error_message = f"The previous response was invalid. Error: {str(e)}. Please correct the JSON to match the schema exactly."
+                messages.append({"role": "assistant", "content": plan_text})
+                messages.append({"role": "user", "content": error_message})
+                
+            except Exception as e:
+                logger.error(f"LLM generation error: {e}")
+                raise
+        
+        # If we run out of retries
+        logger.error(f"Failed to generate valid plan after {max_retries} attempts")
+        if last_error:
+            raise last_error
+        raise Exception("Failed to generate plan")
     
     def _build_plan_prompt(
         self,
@@ -111,7 +158,7 @@ Create a structured learning plan with the following:
 4. Stay within the time budget
 5. Explain why each resource is included
 
-Format your response as JSON with this structure:
+Format your response as strictly valid JSON with this exact structure:
 {{
   "milestones": [
     {{
@@ -131,20 +178,14 @@ Format your response as JSON with this structure:
   "reasoning": "Overall explanation of the plan structure and progression"
 }}
 
-Ensure the total duration of selected resources fits within {time_budget} hours.
+Ensure the total duration of selected resources fits within {time_budget} hours. Do not wrap the JSON in markdown code blocks.
 """
         return prompt
     
-    def _parse_plan_response(
-        self,
-        response_text: str,
-        available_resources: List[Dict[str, Any]]
-    ) -> Dict[str, Any]:
-        """Parse LLM response into structured plan"""
-        import json
-        import re
+    def _parse_and_validate_response(self, response_text: str) -> Dict[str, Any]:
+        """Parse LLM response text and validate against schema"""
         
-        # Extract JSON from response (handle markdown code blocks)
+        # Extract JSON from response (handle markdown code blocks if present)
         json_match = re.search(r'```json\s*(.*?)\s*```', response_text, re.DOTALL)
         if json_match:
             json_text = json_match.group(1)
@@ -153,15 +194,16 @@ Ensure the total duration of selected resources fits within {time_budget} hours.
             json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
             json_text = json_match.group(0) if json_match else response_text
         
-        try:
-            plan_data = json.loads(json_text)
-        except json.JSONDecodeError:
-            logger.warning("Failed to parse JSON, using fallback structure")
-            plan_data = {
-                "milestones": [],
-                "reasoning": "Failed to parse LLM response"
-            }
+        # Parse JSON (will raise JSONDecodeError if invalid)
+        data = json.loads(json_text)
         
+        # Validate against Pydantic model (will raise ValidationError if invalid)
+        validated_model = LLMPlanResponse(**data)
+        
+        return validated_model.model_dump()
+
+    def _enrich_plan_data(self, plan_data: Dict[str, Any], available_resources: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Enrich validated plan data with full resource details"""
         # Enrich with full resource data
         resource_map = {r['resource_id']: r for r in available_resources}
         
@@ -177,7 +219,6 @@ Ensure the total duration of selected resources fits within {time_budget} hours.
                         'level': full_resource.get('level'),
                         'skills': full_resource.get('skills', [])
                     })
-        
         return plan_data
     
     def health_check(self) -> bool:

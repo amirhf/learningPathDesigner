@@ -6,10 +6,29 @@ import json
 import re
 from typing import List, Dict, Any
 from openai import OpenAI
+from pydantic import BaseModel, Field, ValidationError
 from config import get_settings
 
 logger = logging.getLogger(__name__)
 
+# --- Pydantic Models for LLM Validation ---
+
+class LLMQuizOption(BaseModel):
+    id: str
+    text: str
+
+class LLMQuizQuestion(BaseModel):
+    question_text: str
+    options: List[LLMQuizOption]
+    correct_option: str
+    explanation: str
+    source_resource_id: str
+    citation: str
+
+class LLMQuizResponse(BaseModel):
+    questions: List[LLMQuizQuestion]
+
+# ------------------------------------------
 
 class LLMClient:
     """Client for interacting with LLM via OpenRouter"""
@@ -38,33 +57,58 @@ class LLMClient:
         Returns:
             List of quiz questions with citations
         """
-        prompt = self._build_quiz_prompt(resource_snippets, num_questions, difficulty)
+        initial_prompt = self._build_quiz_prompt(resource_snippets, num_questions, difficulty)
         
-        try:
-            response = self.client.chat.completions.create(
-                model=self.settings.default_model,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You are an expert educator creating quiz questions. Every question MUST include a specific citation from the source material. Questions must be clear, unambiguous, and have only one correct answer."
-                    },
-                    {
-                        "role": "user",
-                        "content": prompt
-                    }
-                ],
-                temperature=0.7,
-                max_tokens=3000,
-            )
-            
-            quiz_text = response.choices[0].message.content
-            logger.info(f"Generated {num_questions} quiz questions")
-            
-            return self._parse_quiz_response(quiz_text, resource_snippets)
-            
-        except Exception as e:
-            logger.error(f"LLM quiz generation error: {e}")
-            raise
+        messages = [
+            {
+                "role": "system",
+                "content": "You are an expert educator creating quiz questions. Every question MUST include a specific citation from the source material. Questions must be clear, unambiguous, and have only one correct answer."
+            },
+            {
+                "role": "user",
+                "content": initial_prompt
+            }
+        ]
+        
+        max_retries = 3
+        last_error = None
+        
+        for attempt in range(max_retries):
+            try:
+                logger.info(f"LLM quiz generation attempt {attempt + 1}/{max_retries}")
+                
+                response = self.client.chat.completions.create(
+                    model=self.settings.default_model,
+                    messages=messages,
+                    temperature=0.7,
+                    max_tokens=3000,
+                )
+                
+                quiz_text = response.choices[0].message.content
+                
+                # Parse and Validate
+                validated_response = self._parse_and_validate_response(quiz_text)
+                
+                # Return as list of dicts
+                return [q.model_dump() for q in validated_response.questions]
+                
+            except (json.JSONDecodeError, ValidationError) as e:
+                logger.warning(f"Validation failed on attempt {attempt + 1}: {e}")
+                last_error = e
+                
+                # Add error feedback to messages for next attempt
+                error_message = f"The previous response was invalid. Error: {str(e)}. Please correct the JSON to match the schema exactly."
+                messages.append({"role": "assistant", "content": quiz_text})
+                messages.append({"role": "user", "content": error_message})
+                
+            except Exception as e:
+                logger.error(f"LLM quiz generation error: {e}")
+                raise
+        
+        logger.error(f"Failed to generate valid quiz after {max_retries} attempts")
+        if last_error:
+            raise last_error
+        return []
     
     def _build_quiz_prompt(
         self,
@@ -93,7 +137,7 @@ REQUIREMENTS:
 4. CRITICAL: Include a specific citation (quote or reference) from the source material
 5. Questions should test understanding, not just memorization{difficulty_instruction}
 
-Format your response as JSON:
+Format your response as strictly valid JSON with this exact structure:
 {{
   "questions": [
     {{
@@ -112,22 +156,15 @@ Format your response as JSON:
   ]
 }}
 
-Generate exactly {num_questions} questions.
+Generate exactly {num_questions} questions. Do not wrap the JSON in markdown code blocks.
 """
         return prompt
     
-    def _parse_quiz_response(
-        self,
-        response_text: str,
-        resource_snippets: List[Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
+    def _parse_and_validate_response(self, response_text: str) -> LLMQuizResponse:
         """Parse LLM response into structured quiz questions"""
         
         if not response_text or not response_text.strip():
-            logger.error("Empty response from LLM")
-            return []
-        
-        logger.debug(f"LLM response (first 500 chars): {response_text[:500]}")
+            raise ValueError("Empty response from LLM")
         
         # Extract JSON from response
         json_match = re.search(r'```json\s*(.*?)\s*```', response_text, re.DOTALL)
@@ -137,21 +174,11 @@ Generate exactly {num_questions} questions.
             json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
             json_text = json_match.group(0) if json_match else response_text
         
-        try:
-            quiz_data = json.loads(json_text)
-            questions = quiz_data.get('questions', [])
-            
-            # Validate each question has required fields
-            for q in questions:
-                if not all(k in q for k in ['question_text', 'options', 'correct_option', 'explanation', 'citation']):
-                    logger.warning(f"Question missing required fields: {q}")
-            
-            return questions
-            
-        except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse quiz JSON: {e}")
-            logger.error(f"Attempted to parse: {json_text[:200]}")
-            return []
+        # Parse JSON
+        data = json.loads(json_text)
+        
+        # Validate against Pydantic model
+        return LLMQuizResponse(**data)
     
     def health_check(self) -> bool:
         """Check if LLM service is available"""
