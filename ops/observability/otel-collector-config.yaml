@@ -15,7 +15,7 @@ processors:
 
 exporters:
   googlecloud:
-    project: "${PROJECT_ID}"
+    # Project ID is auto-detected on Cloud Run
     trace:
       enabled: true
   logging:
