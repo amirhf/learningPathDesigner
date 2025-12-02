@@ -6,10 +6,13 @@ import (
 
 // Config holds application configuration
 type Config struct {
-	Environment string
-	RAGServiceURL string
+	Environment       string
+	RAGServiceURL     string
 	PlannerServiceURL string
-	QuizServiceURL string
+	QuizServiceURL    string
+	SupabaseURL       string
+	SupabaseAnonKey   string
+	SupabaseJWTSecret string
 }
 
 // Load loads configuration from environment variables
@@ -19,6 +22,9 @@ func Load() *Config {
 		RAGServiceURL:     getEnv("RAG_SERVICE_URL", "http://localhost:8001"),
 		PlannerServiceURL: getEnv("PLANNER_SERVICE_URL", "http://localhost:8002"),
 		QuizServiceURL:    getEnv("QUIZ_SERVICE_URL", "http://localhost:8003"),
+		SupabaseURL:       getEnv("SUPABASE_URL", ""),
+		SupabaseAnonKey:   getEnv("SUPABASE_ANON_KEY", ""),
+		SupabaseJWTSecret: getEnv("SUPABASE_JWT_SECRET", ""),
 	}
 }
 

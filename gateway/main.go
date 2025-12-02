@@ -48,6 +48,7 @@ func main() {
 	r.Use(middleware.RequestID())
 	r.Use(middleware.Logger())
 	r.Use(middleware.Recovery())
+	r.Use(middleware.Auth(cfg))
 
 	// Root endpoint - API info
 	r.GET("/", func(c *gin.Context) {

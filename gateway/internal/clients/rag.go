@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/amirhf/learnpath-gateway/internal/common"
 	"github.com/amirhf/learnpath-gateway/internal/models"
 )
 
@@ -39,6 +40,7 @@ type SearchRequest struct {
 	Rerank bool  `json:"rerank,omitempty"`
 	RerankTopN int `json:"rerank_top_n,omitempty"`
 	Filters *SearchFilters `json:"filters,omitempty"`
+	TenantID string `json:"tenant_id,omitempty"`
 }
 
 // SearchFilters mirrors the Python RAG service's SearchFilters.
@@ -55,6 +57,11 @@ type SearchFilters struct {
 
 // Search sends a search request to the RAG service.
 func (c *ragClient) Search(ctx context.Context, req SearchRequest) (*models.SearchResponse, error) {
+	// Inject Tenant ID from context if not set
+	if req.TenantID == "" {
+		req.TenantID = common.GetTenantID(ctx)
+	}
+
 	jsonReq, err := json.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal RAG search request: %w", err)

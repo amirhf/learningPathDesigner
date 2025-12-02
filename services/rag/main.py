@@ -10,7 +10,7 @@ import boto3
 import requests
 from bs4 import BeautifulSoup
 from contextlib import asynccontextmanager
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 
 import psycopg2
 from psycopg2.extras import RealDictCursor
@@ -135,34 +135,26 @@ async def search_resources(request: SearchRequest):
     Search for learning resources using semantic search
     """
     try:
-        search_service = get_search_service()
-        
-        # Convert filters to dict
-        filters_dict = request.filters.model_dump() if request.filters else None
-        
-        # Perform search
-        results = search_service.search(
+        # 1. Retrieve Candidates
+        top_k = request.top_k or settings.top_k
+        candidates = retrieve_candidates(
             query=request.query,
-            filters=filters_dict,
-            top_k=request.top_k
+            filters=request.filters,
+            top_k=top_k,
+            tenant_id=request.tenant_id
         )
         
-        # Apply reranking if requested
-        if request.rerank and len(results) > 0:
-            rerank_service = get_rerank_service()
-            reranked_results, scores = rerank_service.rerank(
+        # 2. Rerank Candidates (if requested and candidates found)
+        if request.rerank and len(candidates) > 0:
+            rerank_top_n = request.rerank_top_n or settings.rerank_k
+            results = rerank_candidates(
                 query=request.query,
-                documents=results,
-                top_n=min(request.rerank_top_n, len(results))
+                documents=candidates,
+                top_n=min(rerank_top_n, len(candidates))
             )
-            
-            # Update scores
-            for i, result in enumerate(reranked_results):
-                result["score"] = scores[i]
-            
-            results = reranked_results
             reranked = True
         else:
+            results = candidates
             reranked = False
         
         # Convert to response model
@@ -180,6 +172,54 @@ async def search_resources(request: SearchRequest):
     except Exception as e:
         logger.error(f"Search error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+def retrieve_candidates(
+    query: str,
+    filters: Optional[BaseModel] = None,
+    top_k: int = 20,
+    tenant_id: str = "global"
+) -> List[Dict[str, Any]]:
+    """
+    Retrieve candidate resources using semantic search
+    """
+    search_service = get_search_service()
+    
+    # Convert filters to dict if present, excluding None values to allow defaults/injection
+    filters_dict = filters.model_dump(exclude_none=True) if filters else {}
+    
+    # Add tenant filter if provided and not already in filters
+    if tenant_id and "tenant_id" not in filters_dict:
+        filters_dict["tenant_id"] = tenant_id
+    
+    return search_service.search(
+        query=query,
+        filters=filters_dict,
+        top_k=top_k
+    )
+
+
+def rerank_candidates(
+    query: str,
+    documents: List[Dict[str, Any]],
+    top_n: int = 5
+) -> List[Dict[str, Any]]:
+    """
+    Rerank candidate resources using cross-encoder
+    """
+    rerank_service = get_rerank_service()
+    
+    reranked_results, scores = rerank_service.rerank(
+        query=query,
+        documents=documents,
+        top_n=top_n
+    )
+    
+    # Update scores in the documents
+    for i, result in enumerate(reranked_results):
+        result["score"] = scores[i]
+        
+    return reranked_results
 
 
 @app.post("/rerank", response_model=RerankResponse)
@@ -239,6 +279,7 @@ class Resource(BaseModel):
     skills: List[str] = Field(default_factory=list)
     media_type: Optional[str] = None
     description: Optional[str] = None
+    tenant_id: str = Field(default="global", description="Tenant ID for this resource")
 
 
 class IngestSkillsRequest(BaseModel):
@@ -448,9 +489,9 @@ async def ingest_resources(request: IngestResourcesRequest):
                     cur.execute("""
                         INSERT INTO resource (
                             id, title, url, provider, license, duration_min,
-                            level, skills, media_type, description
+                            level, skills, media_type, description, tenant_id
                         )
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s::uuid[], %s, %s)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s::uuid[], %s, %s, %s)
                         ON CONFLICT (url) DO UPDATE
                         SET title = EXCLUDED.title,
                             provider = EXCLUDED.provider,
@@ -460,6 +501,7 @@ async def ingest_resources(request: IngestResourcesRequest):
                             skills = EXCLUDED.skills,
                             media_type = EXCLUDED.media_type,
                             description = EXCLUDED.description,
+                            tenant_id = EXCLUDED.tenant_id,
                             updated_at = NOW()
                         RETURNING id
                     """, (
@@ -472,7 +514,8 @@ async def ingest_resources(request: IngestResourcesRequest):
                         resource.level,
                         skill_ids,
                         resource.media_type,
-                        resource.description
+                        resource.description,
+                        resource.tenant_id
                     ))
                     
                     result = cur.fetchone()
@@ -528,7 +571,8 @@ async def ingest_resources(request: IngestResourcesRequest):
                                         "level": resource.level,
                                         "skills": resource.skills,
                                         "media_type": resource.media_type,
-                                        "description": resource.description
+                                        "description": resource.description,
+                                        "tenant_id": resource.tenant_id
                                     }
                                 }]
                             )
@@ -566,13 +610,4 @@ async def ingest_resources(request: IngestResourcesRequest):
         failed=failed_count,
         total=len(request.resources),
         errors=errors
-    )
-
-
-if __name__ == "__main__":
-    uvicorn.run(
-        app,
-        host="0.0.0.0",
-        port=settings.port,
-        log_level="info"
     )

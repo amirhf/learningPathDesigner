@@ -87,6 +87,18 @@ func CreatePlan(cfg *config.Config, orch orchestrator.Orchestrator) gin.HandlerF
 		if requestID := c.GetString("request_id"); requestID != "" {
 			ctx = common.WithRequestID(ctx, requestID)
 		}
+		
+		// Propagate User ID from Auth middleware
+		if userID := c.GetString("user_id"); userID != "" {
+			req.UserID = userID
+			orchReq.PlanLearningPathRequest.UserID = &userID
+			ctx = common.WithUserID(ctx, userID)
+		}
+		
+		// Propagate Tenant ID
+		if tenantID := c.GetString("tenant_id"); tenantID != "" {
+			ctx = common.WithTenantID(ctx, tenantID)
+		}
 
 		// Call Orchestrator
 		result, err := orch.OrchestrateFullFlow(ctx, orchReq)

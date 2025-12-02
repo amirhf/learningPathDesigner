@@ -19,6 +19,7 @@ type SearchRequest struct {
 	Rerank      bool          `json:"rerank,omitempty"`
 	RerankTopN  int           `json:"rerank_top_n,omitempty"`
 	Filters     *SearchFilter `json:"filters,omitempty"`
+	TenantID    string        `json:"tenant_id,omitempty"`
 }
 
 // SearchFilter represents search filters
@@ -81,6 +82,11 @@ func Search(cfg *config.Config) gin.HandlerFunc {
 		// Default rerank to false to avoid timeout issues with model loading
 		// Frontend can explicitly set to true if needed
 		// Note: Rerank is currently disabled due to model loading time
+
+		// Inject Tenant ID from context
+		if tenantID := c.GetString("tenant_id"); tenantID != "" {
+			req.TenantID = tenantID
+		}
 
 		// Forward request to RAG service
 		ragURL := fmt.Sprintf("%s/search", cfg.RAGServiceURL)

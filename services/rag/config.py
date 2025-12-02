@@ -32,9 +32,9 @@ class Settings(BaseSettings):
     quantization_config: str = "int8"  # Options: int8, int4, none
     
     # Search
-    default_top_k: int = 20
-    default_rerank_top_n: int = 5
-    max_top_k: int = 50
+    top_k: int = 20
+    rerank_k: int = 5
+    max_context_tokens: int = 4000
     
     class Config:
         env_file = ".env.local"

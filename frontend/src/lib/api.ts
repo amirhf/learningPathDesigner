@@ -1,3 +1,5 @@
+import { supabase } from './supabase'
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'
 
 export interface SearchResult {
@@ -93,10 +95,19 @@ class APIClient {
     options: RequestInit = {}
   ): Promise<T> {
     const url = `${this.baseURL}${endpoint}`
+    
+    // Get current session token
+    let token = null
+    if (supabase) {
+      const { data } = await supabase.auth.getSession()
+      token = data.session?.access_token
+    }
+
     const config: RequestInit = {
       ...options,
       headers: {
         'Content-Type': 'application/json',
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
         ...options.headers,
       },
     }

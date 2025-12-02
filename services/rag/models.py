@@ -25,6 +25,7 @@ class SearchFilter(BaseModel):
     skills: Optional[List[str]] = Field(None, description="Required skill UUIDs")
     media_type: Optional[str] = Field(None, description="Media type filter")
     provider: Optional[str] = Field(None, description="Provider filter")
+    tenant_id: Optional[str] = Field(None, description="Filter by tenant ID")
 
 
 class SearchRequest(BaseModel):
@@ -34,6 +35,7 @@ class SearchRequest(BaseModel):
     top_k: int = Field(default=20, ge=1, le=50, description="Number of results to return")
     rerank: bool = Field(default=False, description="Whether to apply reranking")
     rerank_top_n: int = Field(default=5, ge=1, le=20, description="Number of results after reranking")
+    tenant_id: str = Field(default="global", description="Tenant context")
 
 
 class ResourceResult(BaseModel):
@@ -49,6 +51,7 @@ class ResourceResult(BaseModel):
     media_type: Optional[str] = None
     score: float
     why_relevant: Optional[str] = None
+    tenant_id: str = "global"
 
 
 class SearchResponse(BaseModel):

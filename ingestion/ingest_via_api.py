@@ -8,12 +8,16 @@ from pathlib import Path
 import requests
 
 
-def ingest_skills(api_url: str, skills_file: Path):
+def ingest_skills(api_url: str, skills_file: Path, tenant_id: str = "global"):
     """Ingest skills via API"""
     with open(skills_file) as f:
         skills_data = json.load(f)
     
-    print(f"Ingesting {len(skills_data)} skills...")
+    # Inject tenant_id
+    for skill in skills_data:
+        skill["tenant_id"] = tenant_id
+
+    print(f"Ingesting {len(skills_data)} skills for tenant '{tenant_id}'...")
     
     response = requests.post(
         f"{api_url}/ingest/skills",
@@ -34,12 +38,16 @@ def ingest_skills(api_url: str, skills_file: Path):
         sys.exit(1)
 
 
-def ingest_resources(api_url: str, resources_file: Path, generate_embeddings: bool = False, extract_content: bool = False):
+def ingest_resources(api_url: str, resources_file: Path, generate_embeddings: bool = False, extract_content: bool = False, tenant_id: str = "global"):
     """Ingest resources via API"""
     with open(resources_file) as f:
         resources_data = json.load(f)
     
-    print(f"\nIngesting {len(resources_data)} resources...")
+    # Inject tenant_id
+    for resource in resources_data:
+        resource["tenant_id"] = tenant_id
+
+    print(f"\nIngesting {len(resources_data)} resources for tenant '{tenant_id}'...")
     if extract_content:
         print("  - Extracting content snippets from URLs")
     if generate_embeddings:
@@ -77,6 +85,7 @@ def main():
     parser.add_argument("--resources", action="store_true", help="Ingest resources")
     parser.add_argument("--embeddings", action="store_true", help="Generate embeddings for resources")
     parser.add_argument("--extract-content", action="store_true", help="Extract content snippets from URLs for quiz generation")
+    parser.add_argument("--tenant-id", default="global", help="Tenant ID to associate data with (default: global)")
     
     args = parser.parse_args()
     
@@ -98,7 +107,7 @@ def main():
         if not skills_file.exists():
             print(f"✗ Skills file not found: {skills_file}")
             sys.exit(1)
-        ingest_skills(args.api_url, skills_file)
+        ingest_skills(args.api_url, skills_file, args.tenant_id)
     
     # Ingest resources
     if args.resources:
@@ -106,7 +115,7 @@ def main():
         if not resources_file.exists():
             print(f"✗ Resources file not found: {resources_file}")
             sys.exit(1)
-        ingest_resources(args.api_url, resources_file, args.embeddings, args.extract_content)
+        ingest_resources(args.api_url, resources_file, args.embeddings, args.extract_content, args.tenant_id)
     
     print("\n✓ Ingestion complete!")
 

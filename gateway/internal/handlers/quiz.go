@@ -59,13 +59,25 @@ func GenerateQuiz(cfg *config.Config, orch orchestrator.Orchestrator) gin.Handle
 		if requestID := c.GetString("request_id"); requestID != "" {
 			ctx = common.WithRequestID(ctx, requestID)
 		}
+		
+		// Get User ID from context
+		var userID *string
+		if uid := c.GetString("user_id"); uid != "" {
+			userID = &uid
+			ctx = common.WithUserID(ctx, uid)
+		}
+		
+		// Propagate Tenant ID
+		if tenantID := c.GetString("tenant_id"); tenantID != "" {
+			ctx = common.WithTenantID(ctx, tenantID)
+		}
 
 		// Use Orchestrator
 		orchReq := models.GenerateQuizRequest{
 			ResourceIDs:  req.ResourceIDs,
 			NumQuestions: req.NumQuestions,
 			Difficulty:   req.Difficulty,
-			// UserID from auth middleware if available, otherwise empty/nil
+			UserID:       userID,
 		}
 
 		quiz, err := orch.GenerateQuiz(ctx, orchReq)

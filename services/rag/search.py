@@ -35,9 +35,31 @@ class SearchService:
     def build_filter(self, search_filter: Optional[Dict[str, Any]] = None) -> Optional[Filter]:
         """Build Qdrant filter from search parameters"""
         if not search_filter:
-            return None
+            # Default to global only if no filter provided? Or allow all?
+            # Safer to default to global for now if we want isolation by default.
+            return Filter(must=[FieldCondition(key="tenant_id", match=MatchValue(value="global"))])
         
         conditions = []
+        
+        # Tenant filter: (tenant_id = 'global' OR tenant_id = current_tenant)
+        tenant_id = search_filter.get("tenant_id", "global")
+        if tenant_id == "global":
+            conditions.append(
+                FieldCondition(
+                    key="tenant_id",
+                    match=MatchValue(value="global")
+                )
+            )
+        else:
+            # OR condition
+            conditions.append(
+                Filter(
+                    should=[
+                        FieldCondition(key="tenant_id", match=MatchValue(value="global")),
+                        FieldCondition(key="tenant_id", match=MatchValue(value=tenant_id))
+                    ]
+                )
+            )
         
         # Level filter (less than or equal)
         if search_filter.get("level") is not None:
