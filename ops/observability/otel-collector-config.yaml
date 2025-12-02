@@ -4,7 +4,7 @@ receivers:
       grpc:
         endpoint: "0.0.0.0:4317"
       http:
-        endpoint: "0.0.0.0:8080" # Cloud Run expects traffic on 8080 by default
+        endpoint: "0.0.0.0:${env:PORT}" # Listen on the port defined by Cloud Run
 
 processors:
   batch:
