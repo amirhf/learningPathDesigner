@@ -16,8 +16,6 @@ processors:
 exporters:
   googlecloud:
     # Project ID is auto-detected on Cloud Run
-    trace:
-      enabled: true
   logging:
     loglevel: info
 
@@ -26,4 +24,4 @@ service:
     traces:
       receivers: [otlp]
       processors: [memory_limiter, batch]
-      exporters: [logging] # Temporarily disabled googlecloud to debug startup
+      exporters: [googlecloud, logging]
