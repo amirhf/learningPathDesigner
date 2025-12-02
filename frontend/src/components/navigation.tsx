@@ -3,17 +3,18 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { BookOpen, Search, Target, GraduationCap, User, LogIn } from 'lucide-react'
+import { BookOpen, Search, Target, GraduationCap, User, LogIn, Home } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useStore } from '@/lib/store'
 import { getCurrentUser } from '@/lib/supabase'
 
 const navItems = [
-  { href: '/', label: 'Home', icon: BookOpen },
+  { href: '/', label: 'Home', icon: Home },
   { href: '/search', label: 'Search', icon: Search },
   { href: '/plan/new', label: 'Create Plan', icon: Target },
   { href: '/dashboard', label: 'Dashboard', icon: GraduationCap },
+  { href: '/dashboard/content', label: 'Resources', icon: BookOpen },
 ]
 
 export function Navigation() {

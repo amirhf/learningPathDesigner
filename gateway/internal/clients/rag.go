@@ -15,6 +15,7 @@ import (
 // RAGClient defines the interface for interacting with the RAG service.
 type RAGClient interface {
 	Search(ctx context.Context, req SearchRequest) (*models.SearchResponse, error)
+	IngestResources(ctx context.Context, urls []string) error
 	// TODO: Add other RAG service methods if needed, like Embed, Rerank
 }
 
@@ -54,6 +55,22 @@ type SearchFilters struct {
 	ExcludeURLs  []string `json:"exclude_urls,omitempty"`
 }
 
+// IngestResource mirrors the Python RAG service's Resource model for ingestion.
+type IngestResource struct {
+	Title       string   `json:"title"`
+	URL         string   `json:"url"`
+	Provider    string   `json:"provider,omitempty"`
+	TenantID    string   `json:"tenant_id,omitempty"`
+	// Other fields optional/default
+}
+
+// IngestRequest mirrors the Python RAG service's IngestResourcesRequest.
+type IngestRequestPayload struct {
+	Resources          []IngestResource `json:"resources"`
+	GenerateEmbeddings bool             `json:"generate_embeddings"`
+	ExtractContent     bool             `json:"extract_content"`
+}
+
 
 // Search sends a search request to the RAG service.
 func (c *ragClient) Search(ctx context.Context, req SearchRequest) (*models.SearchResponse, error) {
@@ -91,4 +108,55 @@ func (c *ragClient) Search(ctx context.Context, req SearchRequest) (*models.Sear
 	}
 
 	return &searchResp, nil
+}
+
+// IngestResources sends resources to be ingested.
+func (c *ragClient) IngestResources(ctx context.Context, urls []string) error {
+	tenantID := common.GetTenantID(ctx)
+	if tenantID == "" {
+		tenantID = "global" // Fallback if not set (though handler should ensure it)
+	}
+
+	resources := make([]IngestResource, len(urls))
+	for i, url := range urls {
+		resources[i] = IngestResource{
+			Title:    url, // Temporary title, assume backend extracts or user updates later
+			URL:      url,
+			TenantID: tenantID,
+		}
+	}
+
+	payload := IngestRequestPayload{
+		Resources:          resources,
+		GenerateEmbeddings: true,
+		ExtractContent:     true,
+	}
+
+	jsonReq, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("failed to marshal ingest request: %w", err)
+	}
+
+	// Increase timeout for ingestion as it involves scraping/embedding
+	client := &http.Client{Timeout: 60 * time.Second} 
+	
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", fmt.Sprintf("%s/ingest/resources", c.baseURL), bytes.NewBuffer(jsonReq))
+	if err != nil {
+		return fmt.Errorf("failed to create ingest request: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := client.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("failed to send ingest request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		var errRes map[string]interface{}
+		json.NewDecoder(resp.Body).Decode(&errRes)
+		return fmt.Errorf("ingest service returned non-OK status: %d, error: %v", resp.StatusCode, errRes)
+	}
+
+	return nil
 }

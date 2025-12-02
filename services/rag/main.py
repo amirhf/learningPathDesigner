@@ -29,6 +29,14 @@ from embeddings import get_embedding_service
 from search import get_search_service
 from rerank import get_rerank_service
 
+# OpenTelemetry Imports
+from opentelemetry import trace
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+from opentelemetry.sdk.resources import Resource
+from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+
 # Setup logging
 logging.basicConfig(
     level=logging.INFO,
@@ -64,6 +72,26 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan
 )
+
+# Setup OpenTelemetry
+def setup_telemetry(app: FastAPI):
+    endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
+    if endpoint:
+        try:
+            # Resource automatically picks up OTEL_SERVICE_NAME from env
+            resource = Resource.create()
+            provider = TracerProvider(resource=resource)
+            # Use the endpoint from env (e.g. http://jaeger:4317)
+            exporter = OTLPSpanExporter(endpoint=endpoint, insecure=True)
+            processor = BatchSpanProcessor(exporter)
+            provider.add_span_processor(processor)
+            trace.set_tracer_provider(provider)
+            FastAPIInstrumentor.instrument_app(app)
+            logger.info(f"OpenTelemetry enabled with endpoint: {endpoint}")
+        except Exception as e:
+            logger.error(f"Failed to setup OpenTelemetry: {e}")
+
+setup_telemetry(app)
 
 # Add CORS middleware
 app.add_middleware(
@@ -304,8 +332,17 @@ def get_db_connection():
     return psycopg2.connect(settings.database_url, cursor_factory=RealDictCursor)
 
 
-def extract_content_from_url(url: str, max_length: int = 3000) -> Optional[str]:
-    """Extract text content from a URL"""
+def extract_content_from_url(url: str, max_length: int = 3000) -> Dict[str, Optional[str]]:
+    """
+    Extract text content and metadata from a URL.
+    Returns a dict with keys: content, title, description.
+    """
+    result = {
+        "content": None,
+        "title": None,
+        "description": None
+    }
+    
     try:
         response = requests.get(url, timeout=10, headers={
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
@@ -314,32 +351,45 @@ def extract_content_from_url(url: str, max_length: int = 3000) -> Optional[str]:
         
         soup = BeautifulSoup(response.text, 'html.parser')
         
-        # Remove unwanted elements
+        # Extract title
+        if soup.title and soup.title.string:
+            result["title"] = soup.title.string.strip()
+            
+        # Extract description
+        meta_desc = soup.find("meta", attrs={"name": "description"}) or soup.find("meta", attrs={"property": "og:description"})
+        if meta_desc:
+            content = meta_desc.get("content")
+            if content:
+                result["description"] = content.strip()
+        
+        # Remove unwanted elements for content extraction
         for element in soup(['script', 'style', 'nav', 'header', 'footer', 'aside', 'iframe']):
             element.decompose()
         
         # Try to find main content
-        content = None
+        content_text = None
         for tag in [soup.find('article'), soup.find('main'), soup.find('div', class_='content')]:
             if tag:
-                content = tag.get_text()
+                content_text = tag.get_text()
                 break
         
-        if not content:
-            content = soup.get_text()
+        if not content_text:
+            content_text = soup.get_text()
         
         # Clean and truncate
-        lines = [line.strip() for line in content.splitlines() if line.strip()]
+        lines = [line.strip() for line in content_text.splitlines() if line.strip()]
         text = ' '.join(lines)
         
         if len(text) > max_length:
             text = text[:max_length]
         
-        return text if len(text) > 100 else None
+        result["content"] = text if len(text) > 100 else None
+        
+        return result
         
     except Exception as e:
         logger.warning(f"Failed to extract content from {url}: {e}")
-        return None
+        return result
 
 
 def upload_to_s3(content: str, resource_id: str) -> Optional[str]:
@@ -392,15 +442,16 @@ async def ingest_skills(request: IngestSkillsRequest):
                     
                     # Insert or update skill
                     cur.execute("""
-                        INSERT INTO skill (id, name, slug, level_hint, description)
-                        VALUES (%s, %s, %s, %s, %s)
+                        INSERT INTO skill (id, name, slug, level_hint, description, tenant_id)
+                        VALUES (%s, %s, %s, %s, %s, %s)
                         ON CONFLICT (slug) DO UPDATE
                         SET name = EXCLUDED.name,
                             level_hint = EXCLUDED.level_hint,
                             description = EXCLUDED.description,
+                            tenant_id = EXCLUDED.tenant_id,
                             updated_at = NOW()
                         RETURNING id
-                    """, (skill_id, skill.name, skill.slug, skill.level_hint, skill.description))
+                    """, (skill_id, skill.name, skill.slug, skill.level_hint, skill.description, skill.tenant_id))
                     
                     result = cur.fetchone()
                     if result:
@@ -475,6 +526,23 @@ async def ingest_resources(request: IngestResourcesRequest):
             for resource in request.resources:
                 try:
                     resource_id = str(uuid.uuid4())
+                    s3_key = None
+                    
+                    # Extract content first (if requested) to get metadata
+                    if request.extract_content:
+                        extracted = extract_content_from_url(resource.url)
+                        
+                        # Update title if missing or just URL
+                        if extracted["title"] and (not resource.title or resource.title == resource.url):
+                            resource.title = extracted["title"]
+                            
+                        # Update description if missing
+                        if extracted["description"] and not resource.description:
+                            resource.description = extracted["description"]
+                            
+                        # Upload content to S3
+                        if extracted["content"]:
+                            s3_key = upload_to_s3(extracted["content"], resource_id)
                     
                     # Resolve skill IDs
                     skill_ids = []
@@ -482,16 +550,17 @@ async def ingest_resources(request: IngestResourcesRequest):
                         if slug in skill_map:
                             skill_ids.append(skill_map[slug])
                         else:
-                            logger.warning(f"Skill slug '{slug}' not found for resource {resource.title}")
+                            # logger.warning(f"Skill slug '{slug}' not found for resource {resource.title}")
+                            pass
                     
                     # Insert resource into PostgreSQL
                     logger.info(f"Inserting resource: {resource.title} (URL: {resource.url})")
                     cur.execute("""
                         INSERT INTO resource (
                             id, title, url, provider, license, duration_min,
-                            level, skills, media_type, description, tenant_id
+                            level, skills, media_type, description, tenant_id, snippet_s3_key
                         )
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s::uuid[], %s, %s, %s)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s::uuid[], %s, %s, %s, %s)
                         ON CONFLICT (url) DO UPDATE
                         SET title = EXCLUDED.title,
                             provider = EXCLUDED.provider,
@@ -502,6 +571,7 @@ async def ingest_resources(request: IngestResourcesRequest):
                             media_type = EXCLUDED.media_type,
                             description = EXCLUDED.description,
                             tenant_id = EXCLUDED.tenant_id,
+                            snippet_s3_key = COALESCE(EXCLUDED.snippet_s3_key, resource.snippet_s3_key),
                             updated_at = NOW()
                         RETURNING id
                     """, (
@@ -515,31 +585,14 @@ async def ingest_resources(request: IngestResourcesRequest):
                         skill_ids,
                         resource.media_type,
                         resource.description,
-                        resource.tenant_id
+                        resource.tenant_id,
+                        s3_key
                     ))
                     
                     result = cur.fetchone()
                     if result:
                         resource_id = str(result['id'])
                         logger.info(f"Resource inserted/updated with ID: {resource_id}")
-                    
-                    # Extract content and upload to S3 if requested
-                    if request.extract_content:
-                        try:
-                            content = extract_content_from_url(resource.url)
-                            if content:
-                                s3_key = upload_to_s3(content, resource_id)
-                                if s3_key:
-                                    # Update resource with S3 key
-                                    cur.execute("""
-                                        UPDATE resource
-                                        SET snippet_s3_key = %s, updated_at = NOW()
-                                        WHERE id = %s
-                                    """, (s3_key, resource_id))
-                                    logger.info(f"Extracted and uploaded content for {resource.title}")
-                        except Exception as e:
-                            logger.warning(f"Failed to extract content for {resource.title}: {e}")
-                            # Don't fail the whole ingestion if content extraction fails
                     
                     # Generate embeddings and store in Qdrant if requested
                     if request.generate_embeddings:

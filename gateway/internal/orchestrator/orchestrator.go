@@ -16,6 +16,7 @@ type Orchestrator interface {
 	PlanLearningPath(ctx context.Context, req models.PlanLearningPathRequest) (*models.LearningPath, error)
 	GenerateQuiz(ctx context.Context, req models.GenerateQuizRequest) (*models.Quiz, error)
 	OrchestrateFullFlow(ctx context.Context, req models.OrchestrateFullFlowRequest) (*models.LearningPathWithQuiz, error)
+	IngestContent(ctx context.Context, req models.IngestRequest) error
 }
 
 // NewOrchestrator creates a new Orchestrator instance.
@@ -127,6 +128,13 @@ func (s *orchestratorService) OrchestrateFullFlow(ctx context.Context, req model
 		LearningPath: *learningPath,
 		Quiz:         quiz,
 	}, nil
+}
+
+// IngestContent orchestrates the ingestion of content URLs.
+func (s *orchestratorService) IngestContent(ctx context.Context, req models.IngestRequest) error {
+	// Directly forward to RAG client's ingestion
+	// In future, this could involve validation, quota checking, etc.
+	return s.ragClient.IngestResources(ctx, req.URLs)
 }
 
 // ============================================================================

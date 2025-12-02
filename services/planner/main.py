@@ -4,10 +4,19 @@ Handles learning plan generation and replanning
 """
 import logging
 import uuid
+import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import httpx
+
+# OpenTelemetry Imports
+from opentelemetry import trace
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+from opentelemetry.sdk.resources import Resource
+from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 
 from config import get_settings
 from models import (
@@ -58,6 +67,26 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan
 )
+
+# Setup OpenTelemetry
+def setup_telemetry(app: FastAPI):
+    endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
+    if endpoint:
+        try:
+            # Resource automatically picks up OTEL_SERVICE_NAME from env
+            resource = Resource.create()
+            provider = TracerProvider(resource=resource)
+            # Use the endpoint from env (e.g. http://jaeger:4317)
+            exporter = OTLPSpanExporter(endpoint=endpoint, insecure=True)
+            processor = BatchSpanProcessor(exporter)
+            provider.add_span_processor(processor)
+            trace.set_tracer_provider(provider)
+            FastAPIInstrumentor.instrument_app(app)
+            logger.info(f"OpenTelemetry enabled with endpoint: {endpoint}")
+        except Exception as e:
+            logger.error(f"Failed to setup OpenTelemetry: {e}")
+
+setup_telemetry(app)
 
 # Add CORS middleware
 app.add_middleware(
@@ -110,7 +139,7 @@ async def get_plan(plan_id: str):
                     resource_id=res_data['resource_id'],
                     title=res_data.get('title', 'Unknown'),
                     url=res_data.get('url', ''),
-                    duration_min=res_data.get('duration_min', 0),
+                    duration_min=res_data.get('duration_min') or 0,
                     level=res_data.get('level'),
                     skills=res_data.get('skills', []),
                     why_included=res_data.get('why_included', 'Relevant to milestone'),
@@ -197,14 +226,17 @@ async def generate_plan(request: PlanRequest):
             milestone_hours = 0
             
             for j, res_data in enumerate(milestone_data.get('resources', [])):
-                duration_hours = res_data.get('duration_min', 0) / 60
+                duration_min = res_data.get('duration_min')
+                if duration_min is None:
+                    duration_min = 0
+                duration_hours = duration_min / 60
                 milestone_hours += duration_hours
                 
                 resources.append(ResourceItem(
                     resource_id=res_data['resource_id'],
                     title=res_data.get('title', 'Unknown'),
                     url=res_data.get('url', ''),
-                    duration_min=res_data.get('duration_min', 0),
+                    duration_min=duration_min,
                     level=res_data.get('level'),
                     skills=res_data.get('skills', []),
                     why_included=res_data.get('why_included', 'Relevant to milestone'),

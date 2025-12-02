@@ -4,15 +4,23 @@ Handles quiz generation and grading with 100% citation requirement
 """
 import logging
 import uuid
+import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
+# OpenTelemetry Imports
+from opentelemetry import trace
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+from opentelemetry.sdk.resources import Resource
+from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+
 from config import get_settings
 from models import (
-    QuizGenerateRequest, QuizResponse, QuizQuestion, QuizOption,
-    QuizSubmitRequest, QuizSubmitResponse, QuestionResult,
-    HealthResponse
+    QuizGenerateRequest, QuizResponse, QuizSubmitRequest, QuizSubmitResponse,
+    QuizOption, QuizQuestion, QuestionResult, HealthResponse
 )
 from llm_client import get_llm_client
 from database import get_db_client
@@ -58,6 +66,26 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan
 )
+
+# Setup OpenTelemetry
+def setup_telemetry(app: FastAPI):
+    endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
+    if endpoint:
+        try:
+            # Resource automatically picks up OTEL_SERVICE_NAME from env
+            resource = Resource.create()
+            provider = TracerProvider(resource=resource)
+            # Use the endpoint from env (e.g. http://jaeger:4317)
+            exporter = OTLPSpanExporter(endpoint=endpoint, insecure=True)
+            processor = BatchSpanProcessor(exporter)
+            provider.add_span_processor(processor)
+            trace.set_tracer_provider(provider)
+            FastAPIInstrumentor.instrument_app(app)
+            logger.info(f"OpenTelemetry enabled with endpoint: {endpoint}")
+        except Exception as e:
+            logger.error(f"Failed to setup OpenTelemetry: {e}")
+
+setup_telemetry(app)
 
 # Add CORS middleware
 app.add_middleware(

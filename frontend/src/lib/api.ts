@@ -252,6 +252,14 @@ class APIClient {
   async healthCheck(): Promise<{ status: string }> {
     return this.request<{ status: string }>('/health')
   }
+
+  // Content Ingestion
+  async ingestContent(urls: string[]): Promise<{ message: string; count: number }> {
+    return this.request<{ message: string; count: number }>('/api/content/ingest', {
+      method: 'POST',
+      body: JSON.stringify({ urls }),
+    })
+  }
 }
 
 export const api = new APIClient()

@@ -47,6 +47,16 @@ services:
       timeout: 5s
       retries: 5
 
+  jaeger:
+    image: jaegertracing/all-in-one:1.53
+    container_name: learnpath-jaeger
+    ports:
+      - "16686:16686" # UI
+      - "4317:4317"   # OTLP gRPC
+      - "4318:4318"   # OTLP HTTP
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+
   rag-service:
     build:
       context: ./services/rag
@@ -56,9 +66,13 @@ services:
       - "8001:8001"
     env_file:
       - .env.docker
+    environment:
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
+      - OTEL_SERVICE_NAME=learnpath-rag
     depends_on:
       - postgres
       - qdrant
+      - jaeger
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
       interval: 30s
@@ -74,9 +88,13 @@ services:
       - "8002:8002"
     env_file:
       - .env.docker
+    environment:
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
+      - OTEL_SERVICE_NAME=learnpath-planner
     depends_on:
       - postgres
       - rag-service
+      - jaeger
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
       interval: 30s
@@ -92,8 +110,12 @@ services:
       - "8003:8003"
     env_file:
       - .env.docker
+    environment:
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
+      - OTEL_SERVICE_NAME=learnpath-quiz
     depends_on:
       - postgres
+      - jaeger
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8003/health"]
       interval: 30s
@@ -109,10 +131,14 @@ services:
       - "8080:8080"
     env_file:
       - .env.docker
+    environment:
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
+      - OTEL_SERVICE_NAME=learnpath-gateway
     depends_on:
       - rag-service
       - planner-service
       - quiz-service
+      - jaeger
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s

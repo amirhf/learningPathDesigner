@@ -98,6 +98,9 @@ func main() {
 		// Quiz Service
 		api.POST("/quiz/generate", handlers.GenerateQuiz(cfg, orch))
 		api.POST("/quiz/submit", handlers.SubmitQuiz(cfg))
+
+		// Content Ingestion (BYO Content)
+		api.POST("/content/ingest", handlers.IngestContent(cfg, orch))
 	}
 
 	// Start server
