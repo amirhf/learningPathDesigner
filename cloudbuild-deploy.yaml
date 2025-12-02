@@ -66,6 +66,7 @@ steps:
       - '--concurrency=80'
       - '--min-instances=0'
       - '--max-instances=3'
+      - '--set-env-vars=PROJECT_ID=$PROJECT_ID'
     id: 'deploy-otel'
     waitFor: ['push-otel']
 
