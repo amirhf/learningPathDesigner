@@ -19,6 +19,9 @@ This repo is a **reference architecture** for building production-ready AI agent
 *   **RAG + Re-ranking pipeline**: Semantic search (e5-base) → Re-ranking (bge-reranker) → Context window construction.
 *   **Structured JSON outputs**: All plans & quizzes are strictly validated against schemas.
 *   **Multi-service Orchestration**: Frontend (Next.js) → Go Gateway → Python AI microservices → Qdrant + Postgres.
+*   **Multi-tenancy**: Achieved via shared Qdrant collections and Postgres tables with `tenant_id` filtering.
+*   **Bring Your Own Content (BYOC)**: Users can ingest their own URLs, which are processed with metadata extraction.
+*   **Distributed Tracing**: End-to-end observability with OpenTelemetry.
 
 ## The Planner–Executor Pattern
 
@@ -49,6 +52,7 @@ Frontend (Next.js) → Gateway (Go) → AI Services (FastAPI)
                                     └─ Quiz Service
                                     
 Data Layer: Qdrant (vectors) + Postgres (metadata) + S3 (snippets)
+Observability: OpenTelemetry (Metrics, Traces, Logs) with Jaeger
 ```
 
 ## Tech Stack
@@ -63,6 +67,7 @@ Data Layer: Qdrant (vectors) + Postgres (metadata) + S3 (snippets)
 - **Database:** PostgreSQL (Neon/Supabase)
 - **Auth:** Supabase Auth
 - **Deployment:** Railway + Vercel
+- **Observability:** OpenTelemetry (with Jaeger for traces)
 
 ## Quick Start
 
@@ -101,6 +106,8 @@ Data Layer: Qdrant (vectors) + Postgres (metadata) + S3 (snippets)
    ```powershell
    pip install -r ingestion/requirements.txt
    pip install -r services/rag/requirements.txt
+   pip install -r services/planner/requirements.txt
+   pip install -r services/quiz/requirements.txt
    ```
 
 4. **Start infrastructure:**
@@ -119,12 +126,18 @@ Data Layer: Qdrant (vectors) + Postgres (metadata) + S3 (snippets)
 
 6. **Seed data:**
    ```powershell
+   # Seed skills
    python -m ingestion.seed_skills
+   # Setup Qdrant collection (if not already done)
    python -m ingestion.setup_qdrant
-   python -m ingestion.ingest --seed ingestion/seed_resources.json --limit 50
+   # Ingest seed resources with embeddings and tenant_id="global"
+   python ingestion/ingest_via_api.py --api-url http://localhost:8001 --resources --embeddings --tenant-id global
+   # Fix durations for old entries
+   docker cp ingestion/fix_durations.py learnpath-rag:/app/fix_durations.py
+   docker-compose exec rag-service python /app/fix_durations.py
    ```
 
-7. **Start services:**
+7. **Start services (if not using docker-compose up for dev mode):**
    ```powershell
    # Terminal 1: RAG service
    cd services/rag
@@ -153,6 +166,7 @@ Data Layer: Qdrant (vectors) + Postgres (metadata) + S3 (snippets)
 6. **Access:**
    - Frontend: http://localhost:3000
    - Gateway: http://localhost:8080
+   - Jaeger UI: http://localhost:16686 (for tracing)
    - RAG Service: http://localhost:8001
    - Planner Service: http://localhost:8002
    - Quiz Service: http://localhost:8003
@@ -185,6 +199,8 @@ Key variables:
 - `OPENROUTER_API_KEY` - OpenRouter API key
 - `SUPABASE_URL` - Supabase project URL
 - `SUPABASE_ANON_KEY` - Supabase anonymous key
+- `OTEL_EXPORTER_OTLP_ENDPOINT` - OpenTelemetry collector endpoint (e.g., `http://jaeger:4317`)
+- `OTEL_SERVICE_NAME` - Unique service name for tracing
 
 ## Deployment
 
@@ -207,6 +223,8 @@ Key variables:
 - [Implementation Plan](planning/implementation_steps.md)
 - [Design Document](planning/design.md)
 - [Lean Deployment Guide](planning/lean_deployment_plan.md)
+- [ADR-001: RAG Architecture](docs/adr/adr-001-rag-architecture.md)
+- [ADR-002: Multi-tenancy Strategy](docs/adr/adr-002-multi-tenancy-strategy.md)
 
 ## License
 

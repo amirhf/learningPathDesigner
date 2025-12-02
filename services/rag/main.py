@@ -332,15 +332,16 @@ def get_db_connection():
     return psycopg2.connect(settings.database_url, cursor_factory=RealDictCursor)
 
 
-def extract_content_from_url(url: str, max_length: int = 3000) -> Dict[str, Optional[str]]:
+def extract_content_from_url(url: str, max_length: int = 3000) -> Dict[str, Any]:
     """
     Extract text content and metadata from a URL.
-    Returns a dict with keys: content, title, description.
+    Returns a dict with keys: content, title, description, estimated_duration_min.
     """
     result = {
         "content": None,
         "title": None,
-        "description": None
+        "description": None,
+        "estimated_duration_min": 5 # Default fallback
     }
     
     try:
@@ -379,6 +380,10 @@ def extract_content_from_url(url: str, max_length: int = 3000) -> Dict[str, Opti
         # Clean and truncate
         lines = [line.strip() for line in content_text.splitlines() if line.strip()]
         text = ' '.join(lines)
+        
+        # Calculate estimated duration (avg 200 wpm)
+        word_count = len(text.split())
+        result["estimated_duration_min"] = max(1, round(word_count / 200))
         
         if len(text) > max_length:
             text = text[:max_length]
@@ -539,6 +544,10 @@ async def ingest_resources(request: IngestResourcesRequest):
                         # Update description if missing
                         if extracted["description"] and not resource.description:
                             resource.description = extracted["description"]
+                            
+                        # Update duration if missing
+                        if not resource.duration_min and extracted["estimated_duration_min"]:
+                            resource.duration_min = extracted["estimated_duration_min"]
                             
                         # Upload content to S3
                         if extracted["content"]:
