@@ -130,28 +130,36 @@ async def get_plan(plan_id: str):
         # Parse the stored plan data
         stored_plan = plan_data.get('plan_data', {})
         milestones = []
+        calculated_total_hours = 0
         
         for i, milestone_data in enumerate(stored_plan.get('milestones', [])):
             resources = []
+            milestone_hours = 0
             
             for j, res_data in enumerate(milestone_data.get('resources', [])):
+                duration_min = res_data.get('duration_min') or 0
+                duration_hours = duration_min / 60
+                milestone_hours += duration_hours
+                
                 resources.append(ResourceItem(
                     resource_id=res_data['resource_id'],
                     title=res_data.get('title', 'Unknown'),
                     url=res_data.get('url', ''),
-                    duration_min=res_data.get('duration_min') or 0,
+                    duration_min=duration_min,
                     level=res_data.get('level'),
                     skills=res_data.get('skills', []),
                     why_included=res_data.get('why_included', 'Relevant to milestone'),
                     order=j + 1
                 ))
             
+            calculated_total_hours += milestone_hours
+            
             milestones.append(Milestone(
                 milestone_id=milestone_data.get('milestone_id', str(uuid.uuid4())),
                 title=milestone_data.get('title', f'Milestone {i+1}'),
                 description=milestone_data.get('description', ''),
                 resources=resources,
-                estimated_hours=milestone_data.get('estimated_hours', 0),
+                estimated_hours=round(milestone_hours, 2),
                 skills_gained=milestone_data.get('skills_gained', []),
                 order=i + 1
             ))
@@ -159,7 +167,7 @@ async def get_plan(plan_id: str):
         return PlanResponse(
             plan_id=plan_data['plan_id'],
             goal=plan_data['goal'],
-            total_hours=plan_data.get('total_hours', 0),
+            total_hours=round(calculated_total_hours, 2),
             estimated_weeks=plan_data.get('estimated_weeks', 1),
             milestones=milestones,
             prerequisites_met=True,
@@ -227,6 +235,7 @@ async def generate_plan(request: PlanRequest):
             
             for j, res_data in enumerate(milestone_data.get('resources', [])):
                 duration_min = res_data.get('duration_min')
+                logger.info(f"Resource {res_data.get('resource_id')} duration: {duration_min}")
                 if duration_min is None:
                     duration_min = 0
                 duration_hours = duration_min / 60

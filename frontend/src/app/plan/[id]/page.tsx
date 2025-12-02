@@ -16,14 +16,14 @@ export default function PlanPage() {
   const router = useRouter()
   const { toast } = useToast()
   const planId = params.id as string
-  
+
   const [plan, setPlan] = useState<LearningPlan | null>(null)
   const [loading, setLoading] = useState(true)
   const [completedLessons, setCompletedLessons] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     loadPlan()
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [planId])
 
   const loadPlan = async () => {
@@ -97,7 +97,7 @@ export default function PlanPage() {
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-4xl font-bold mb-4">{plan.goal}</h1>
-          
+
           <div className="flex flex-wrap gap-4 mb-6">
             <Badge variant="secondary" className="gap-2">
               <Clock className="h-4 w-4" />
@@ -128,15 +128,15 @@ export default function PlanPage() {
           </Card>
         </div>
 
-        {/* Lessons */}
-        <div className="space-y-6">
-          <h2 className="text-2xl font-bold">Learning Path</h2>
-          
-          {plan.lessons.map((lesson, index) => {
-            const isCompleted = completedLessons.has(lesson.id)
-            
-            return (
-              <Card key={lesson.id} className={isCompleted ? 'bg-secondary/50' : ''}>
+                {/* Lessons */}
+                <div className="space-y-6">
+                  <h2 className="text-2xl font-bold">Learning Path</h2>
+                  
+                  {plan.lessons.map((lesson, index) => {
+                    console.log(`Lesson: ${lesson.title}, Duration: ${lesson.estimated_duration_minutes} min`);
+                    const isCompleted = completedLessons.has(lesson.id)
+                    
+                    return (              <Card key={lesson.id} className={isCompleted ? 'bg-secondary/50' : ''}>
                 <CardHeader>
                   <div className="flex items-start gap-4">
                     <button
@@ -149,7 +149,7 @@ export default function PlanPage() {
                         <Circle className="h-6 w-6 text-muted-foreground" />
                       )}
                     </button>
-                    
+
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-2">
                         <Badge variant="outline">Lesson {index + 1}</Badge>
@@ -166,7 +166,7 @@ export default function PlanPage() {
                     </div>
                   </div>
                 </CardHeader>
-                
+
                 <CardContent>
                   {/* Resources */}
                   {lesson.resources.length > 0 && (
@@ -178,7 +178,14 @@ export default function PlanPage() {
                           className="flex items-center justify-between p-3 rounded-lg border bg-background"
                         >
                           <div className="flex-1">
-                            <p className="font-medium text-sm">{resource.title}</p>
+                            <div className="flex items-center gap-2">
+                              <p className="font-medium text-sm">{resource.title}</p>
+                              {resource.metadata?.duration_min > 0 && (
+                                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-secondary text-secondary-foreground">
+                                  {formatDuration(resource.metadata?.duration_min)}
+                                </span>
+                              )}
+                            </div>
                             <p className="text-xs text-muted-foreground line-clamp-1">
                               {resource.description}
                             </p>

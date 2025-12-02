@@ -133,12 +133,14 @@ func (c *plannerClient) GetUserPlans(ctx context.Context, userID string) ([]mode
 		return nil, fmt.Errorf("Planner get user plans service returned non-OK status: %d, error: %v", resp.StatusCode, errRes)
 	}
 
-	var plansResp []models.LearningPath
-	if err := json.NewDecoder(resp.Body).Decode(&plansResp); err != nil {
+	var wrapper struct {
+		Plans []models.LearningPath `json:"plans"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&wrapper); err != nil {
 		return nil, fmt.Errorf("failed to decode Planner get user plans response: %w", err)
 	}
 
-	return plansResp, nil
+	return wrapper.Plans, nil
 }
 
 // Replan sends a request to the Planner service to replan an existing learning plan.

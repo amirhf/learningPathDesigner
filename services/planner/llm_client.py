@@ -215,7 +215,7 @@ Ensure the total duration of selected resources fits within {time_budget} hours.
                     resource.update({
                         'title': full_resource['title'],
                         'url': full_resource['url'],
-                        'duration_min': full_resource.get('duration_min', 0),
+                        'duration_min': full_resource.get('duration_min') or 0,
                         'level': full_resource.get('level'),
                         'skills': full_resource.get('skills', [])
                     })
