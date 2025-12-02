@@ -4,6 +4,10 @@
 steps:
   # Build all images first
   - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-t', 'gcr.io/$PROJECT_ID/otel-collector:latest', './ops/observability']
+    id: 'build-otel'
+
+  - name: 'gcr.io/cloud-builders/docker'
     args: ['build', '-t', 'gcr.io/$PROJECT_ID/rag-service:latest', './services/rag']
     id: 'build-rag'
   
@@ -20,6 +24,11 @@ steps:
     id: 'build-gateway'
   
   # Push all images to GCR (must complete before deployment)
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/$PROJECT_ID/otel-collector:latest']
+    id: 'push-otel'
+    waitFor: ['build-otel']
+
   - name: 'gcr.io/cloud-builders/docker'
     args: ['push', 'gcr.io/$PROJECT_ID/rag-service:latest']
     id: 'push-rag'
@@ -40,28 +49,49 @@ steps:
     id: 'push-gateway'
     waitFor: ['build-gateway']
   
-  # Deploy RAG Service
+  # Deploy OTel Collector (First, so we can get its URL)
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     args:
       - 'gcloud'
       - 'run'
       - 'deploy'
-      - 'rag-service'
-      - '--image=gcr.io/$PROJECT_ID/rag-service:latest'
+      - 'otel-collector'
+      - '--image=gcr.io/$PROJECT_ID/otel-collector:latest'
       - '--region=${_REGION}'
       - '--platform=managed'
       - '--allow-unauthenticated'
-      - '--memory=2Gi'
-      - '--cpu=2'
+      - '--memory=512Mi'
+      - '--cpu=1'
       - '--timeout=300'
-      - '--concurrency=10'
+      - '--concurrency=80'
       - '--min-instances=0'
-      - '--max-instances=10'
-      - '--cpu-boost'
-      - '--set-secrets=DATABASE_URL=database-url:latest,QDRANT_URL=qdrant-url:latest,QDRANT_API_KEY=qdrant-api-key:latest,AWS_ACCESS_KEY_ID=aws-access-key-id:latest,AWS_SECRET_ACCESS_KEY=aws-secret-access-key:latest,AWS_REGION=aws-region:latest,S3_BUCKET_NAME=s3-bucket-name:latest'
-      - '--set-env-vars=QDRANT_COLLECTION=resources,E5_MODEL_NAME=intfloat/e5-base-v2,RERANKER_MODEL_NAME=BAAI/bge-reranker-base,USE_QUANTIZATION=true,QUANTIZATION_CONFIG=int8,LOG_LEVEL=info'
+      - '--max-instances=3'
+    id: 'deploy-otel'
+    waitFor: ['push-otel']
+
+  # Deploy RAG Service
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        OTEL_URL=$$(gcloud run services describe otel-collector --region=${_REGION} --format="value(status.url)")
+        gcloud run deploy rag-service \
+          --image=gcr.io/$PROJECT_ID/rag-service:latest \
+          --region=${_REGION} \
+          --platform=managed \
+          --allow-unauthenticated \
+          --memory=2Gi \
+          --cpu=2 \
+          --timeout=300 \
+          --concurrency=10 \
+          --min-instances=0 \
+          --max-instances=10 \
+          --cpu-boost \
+          --set-secrets=DATABASE_URL=database-url:latest,QDRANT_URL=qdrant-url:latest,QDRANT_API_KEY=qdrant-api-key:latest,AWS_ACCESS_KEY_ID=aws-access-key-id:latest,AWS_SECRET_ACCESS_KEY=aws-secret-access-key:latest,AWS_REGION=aws-region:latest,S3_BUCKET_NAME=s3-bucket-name:latest \
+          --set-env-vars=QDRANT_COLLECTION=resources,E5_MODEL_NAME=intfloat/e5-base-v2,RERANKER_MODEL_NAME=BAAI/bge-reranker-base,USE_QUANTIZATION=true,QUANTIZATION_CONFIG=int8,LOG_LEVEL=info,OTEL_EXPORTER_OTLP_ENDPOINT=$$OTEL_URL,OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
     id: 'deploy-rag'
-    waitFor: ['push-rag']
+    waitFor: ['push-rag', 'deploy-otel']
   
   # Deploy Planner Service
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
@@ -70,6 +100,7 @@ steps:
       - '-c'
       - |
         RAG_URL=$$(gcloud run services describe rag-service --region=${_REGION} --format="value(status.url)")
+        OTEL_URL=$$(gcloud run services describe otel-collector --region=${_REGION} --format="value(status.url)")
         gcloud run deploy planner-service \
           --image=gcr.io/$PROJECT_ID/planner-service:latest \
           --region=${_REGION} \
@@ -82,32 +113,33 @@ steps:
           --min-instances=0 \
           --max-instances=10 \
           --set-secrets=DATABASE_URL=database-url:latest,OPENROUTER_API_KEY=openrouter-api-key:latest \
-          --set-env-vars=RAG_SERVICE_URL=$$RAG_URL,LLM_MODEL=anthropic/claude-3.5-sonnet,LOG_LEVEL=info
+          --set-env-vars=RAG_SERVICE_URL=$$RAG_URL,LLM_MODEL=anthropic/claude-3.5-sonnet,LOG_LEVEL=info,OTEL_EXPORTER_OTLP_ENDPOINT=$$OTEL_URL,OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
     id: 'deploy-planner'
-    waitFor: ['push-planner', 'deploy-rag']
+    waitFor: ['push-planner', 'deploy-rag', 'deploy-otel']
   
   # Deploy Quiz Service
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'bash'
     args:
-      - 'gcloud'
-      - 'run'
-      - 'deploy'
-      - 'quiz-service'
-      - '--image=gcr.io/$PROJECT_ID/quiz-service:latest'
-      - '--region=${_REGION}'
-      - '--platform=managed'
-      - '--allow-unauthenticated'
-      - '--memory=1Gi'
-      - '--cpu=1'
-      - '--timeout=300'
-      - '--concurrency=20'
-      - '--min-instances=0'
-      - '--max-instances=10'
-      - '--cpu-boost'
-      - '--set-secrets=DATABASE_URL=database-url:latest,OPENROUTER_API_KEY=openrouter-api-key:latest,SUPABASE_URL=supabase-url:latest,SUPABASE_SERVICE_KEY=supabase-service-key:latest,AWS_ACCESS_KEY_ID=aws-access-key-id:latest,AWS_SECRET_ACCESS_KEY=aws-secret-access-key:latest,AWS_REGION=aws-region:latest,S3_BUCKET_NAME=s3-bucket-name:latest'
-      - '--set-env-vars=LLM_MODEL=anthropic/claude-3.5-sonnet,LOG_LEVEL=info'
+      - '-c'
+      - |
+        OTEL_URL=$$(gcloud run services describe otel-collector --region=${_REGION} --format="value(status.url)")
+        gcloud run deploy quiz-service \
+          --image=gcr.io/$PROJECT_ID/quiz-service:latest \
+          --region=${_REGION} \
+          --platform=managed \
+          --allow-unauthenticated \
+          --memory=1Gi \
+          --cpu=1 \
+          --timeout=300 \
+          --concurrency=20 \
+          --min-instances=0 \
+          --max-instances=10 \
+          --cpu-boost \
+          --set-secrets=DATABASE_URL=database-url:latest,OPENROUTER_API_KEY=openrouter-api-key:latest,SUPABASE_URL=supabase-url:latest,SUPABASE_SERVICE_KEY=supabase-service-key:latest,AWS_ACCESS_KEY_ID=aws-access-key-id:latest,AWS_SECRET_ACCESS_KEY=aws-secret-access-key:latest,AWS_REGION=aws-region:latest,S3_BUCKET_NAME=s3-bucket-name:latest \
+          --set-env-vars=LLM_MODEL=anthropic/claude-3.5-sonnet,LOG_LEVEL=info,OTEL_EXPORTER_OTLP_ENDPOINT=$$OTEL_URL,OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
     id: 'deploy-quiz'
-    waitFor: ['push-quiz']
+    waitFor: ['push-quiz', 'deploy-otel']
   
   # Deploy Gateway
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
@@ -118,6 +150,7 @@ steps:
         RAG_URL=$$(gcloud run services describe rag-service --region=${_REGION} --format="value(status.url)")
         PLANNER_URL=$$(gcloud run services describe planner-service --region=${_REGION} --format="value(status.url)")
         QUIZ_URL=$$(gcloud run services describe quiz-service --region=${_REGION} --format="value(status.url)")
+        OTEL_URL=$$(gcloud run services describe otel-collector --region=${_REGION} --format="value(status.url)")
         gcloud run deploy gateway \
           --image=gcr.io/$PROJECT_ID/gateway:latest \
           --region=${_REGION} \
@@ -129,10 +162,10 @@ steps:
           --concurrency=80 \
           --min-instances=0 \
           --max-instances=20 \
-          --set-secrets=SUPABASE_URL=supabase-url:latest \
-          --set-env-vars=RAG_SERVICE_URL=$$RAG_URL,PLANNER_SERVICE_URL=$$PLANNER_URL,QUIZ_SERVICE_URL=$$QUIZ_URL,JWT_PUBLIC_KEY_URL=https://hywmzhvyhiynewfsmqln.supabase.co/auth/v1/jwks,ALLOWED_ORIGINS=${_ALLOWED_ORIGINS},RATE_LIMIT_REQUESTS=100,RATE_LIMIT_WINDOW=60,LOG_LEVEL=info
+          --set-secrets=SUPABASE_URL=supabase-url:latest,SUPABASE_ANON_KEY=supabase-anon-key:latest \
+          --set-env-vars=RAG_SERVICE_URL=$$RAG_URL,PLANNER_SERVICE_URL=$$PLANNER_URL,QUIZ_SERVICE_URL=$$QUIZ_URL,JWT_PUBLIC_KEY_URL=https://hywmzhvyhiynewfsmqln.supabase.co/auth/v1/jwks,ALLOWED_ORIGINS=${_ALLOWED_ORIGINS},RATE_LIMIT_REQUESTS=100,RATE_LIMIT_WINDOW=60,LOG_LEVEL=info,OTEL_EXPORTER_OTLP_ENDPOINT=$$OTEL_URL,OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
     id: 'deploy-gateway'
-    waitFor: ['push-gateway', 'deploy-rag', 'deploy-planner', 'deploy-quiz']
+    waitFor: ['push-gateway', 'deploy-rag', 'deploy-planner', 'deploy-quiz', 'deploy-otel']
 
 # Images are pushed explicitly in the steps above
 # No need to list them here again
