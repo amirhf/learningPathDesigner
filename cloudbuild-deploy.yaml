@@ -58,7 +58,7 @@ steps:
       - '--min-instances=0'
       - '--max-instances=10'
       - '--cpu-boost'
-      - '--set-secrets=DATABASE_URL=database-url:latest,QDRANT_URL=qdrant-url:latest,QDRANT_API_KEY=qdrant-api-key:latest'
+      - '--set-secrets=DATABASE_URL=database-url:latest,QDRANT_URL=qdrant-url:latest,QDRANT_API_KEY=qdrant-api-key:latest,AWS_ACCESS_KEY_ID=aws-access-key-id:latest,AWS_SECRET_ACCESS_KEY=aws-secret-access-key:latest,AWS_REGION=aws-region:latest,S3_BUCKET_NAME=s3-bucket-name:latest'
       - '--set-env-vars=QDRANT_COLLECTION=resources,E5_MODEL_NAME=intfloat/e5-base-v2,RERANKER_MODEL_NAME=BAAI/bge-reranker-base,USE_QUANTIZATION=true,QUANTIZATION_CONFIG=int8,LOG_LEVEL=info'
     id: 'deploy-rag'
     waitFor: ['push-rag']
@@ -104,8 +104,8 @@ steps:
       - '--min-instances=0'
       - '--max-instances=10'
       - '--cpu-boost'
-      - '--set-secrets=DATABASE_URL=database-url:latest,OPENROUTER_API_KEY=openrouter-api-key:latest,SUPABASE_URL=supabase-url:latest,SUPABASE_SERVICE_KEY=supabase-service-key:latest'
-      - '--set-env-vars=STORAGE_BUCKET=learnpath-snippets,LLM_MODEL=anthropic/claude-3.5-sonnet,LOG_LEVEL=info'
+      - '--set-secrets=DATABASE_URL=database-url:latest,OPENROUTER_API_KEY=openrouter-api-key:latest,SUPABASE_URL=supabase-url:latest,SUPABASE_SERVICE_KEY=supabase-service-key:latest,AWS_ACCESS_KEY_ID=aws-access-key-id:latest,AWS_SECRET_ACCESS_KEY=aws-secret-access-key:latest,AWS_REGION=aws-region:latest,S3_BUCKET_NAME=s3-bucket-name:latest'
+      - '--set-env-vars=LLM_MODEL=anthropic/claude-3.5-sonnet,LOG_LEVEL=info'
     id: 'deploy-quiz'
     waitFor: ['push-quiz']
   
