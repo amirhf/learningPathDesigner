@@ -1,10 +1,8 @@
 """
-Reranking using cross-encoder model with optional quantization
+Reranking with Deep Infra API or local fallback
 """
 import logging
 from typing import List, Dict, Any, Tuple
-from sentence_transformers import CrossEncoder
-import torch
 
 from config import get_settings
 
@@ -13,44 +11,54 @@ settings = get_settings()
 
 
 class RerankService:
-    """Service for reranking search results with quantization support"""
+    """Service for reranking search results via API or local model"""
     
     def __init__(self):
-        self.model = None
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        logger.info(f"Reranker using device: {self.device}")
+        self.use_deepinfra = settings.use_deepinfra
+        self._local_model = None  # Lazy loaded only if needed
+        self._deepinfra_client = None
+        
+        if self.use_deepinfra:
+            logger.info("RerankService initialized with Deep Infra API")
+        else:
+            logger.info("RerankService initialized with local CrossEncoder model")
     
-    def load_model(self):
-        """Load the reranking model with optional quantization"""
-        if self.model is None:
-            logger.info(f"Loading reranker model: {settings.reranker_model}")
+    def _get_deepinfra_client(self):
+        """Lazy load Deep Infra client"""
+        if self._deepinfra_client is None:
+            from deepinfra_client import get_deepinfra_client
+            self._deepinfra_client = get_deepinfra_client()
+        return self._deepinfra_client
+    
+    def _load_local_model(self):
+        """Load local CrossEncoder model (fallback)"""
+        if self._local_model is None:
+            import torch
+            from sentence_transformers import CrossEncoder
             
-            # Load model with quantization if enabled
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            logger.info(f"Loading local reranker model: {settings.reranker_model} on {device}")
+            
+            self._local_model = CrossEncoder(settings.reranker_model, device=device)
+            
+            # Apply quantization if enabled
             if settings.use_quantization and settings.quantization_config != "none":
-                logger.info(f"Using {settings.quantization_config} quantization for reranker")
-                
-                # For CPU, use dynamic quantization
-                if self.device == "cpu":
-                    self.model = CrossEncoder(settings.reranker_model, device=self.device)
-                    # Apply dynamic quantization to the underlying model
-                    if hasattr(self.model, 'model'):
-                        self.model.model = torch.quantization.quantize_dynamic(
-                            self.model.model,
+                if device == "cpu":
+                    if hasattr(self._local_model, 'model'):
+                        self._local_model.model = torch.quantization.quantize_dynamic(
+                            self._local_model.model,
                             {torch.nn.Linear},
                             dtype=torch.qint8
                         )
-                        logger.info("Applied dynamic int8 quantization to reranker (CPU)")
+                        logger.info("✓ Applied INT8 quantization to reranker")
                 else:
-                    # For CUDA, use half precision
-                    self.model = CrossEncoder(settings.reranker_model, device=self.device)
-                    if hasattr(self.model, 'model') and hasattr(self.model.model, 'half'):
-                        self.model.model = self.model.model.half()
-                        logger.info("Using FP16 precision for reranker (CUDA)")
-            else:
-                self.model = CrossEncoder(settings.reranker_model, device=self.device)
-                logger.info("Quantization disabled for reranker, using full precision")
+                    if hasattr(self._local_model, 'model') and hasattr(self._local_model.model, 'half'):
+                        self._local_model.model = self._local_model.model.half()
+                        logger.info("✓ Using FP16 precision for reranker")
             
-            logger.info("Reranker model loaded successfully")
+            logger.info("✓ Local reranker model ready")
+        
+        return self._local_model
     
     def rerank(
         self,
@@ -69,23 +77,22 @@ class RerankService:
         Returns:
             Tuple of (reranked_documents, scores)
         """
-        if self.model is None:
-            self.load_model()
-        
         if not documents:
             return [], []
         
-        # Prepare query-document pairs
-        pairs = []
+        # Extract text from documents
+        doc_texts = []
         for doc in documents:
-            # Use title and description for reranking
             doc_text = doc.get("title", "")
             if doc.get("description"):
                 doc_text += " " + doc["description"]
-            pairs.append([query, doc_text])
+            doc_texts.append(doc_text)
         
-        # Get scores
-        scores = self.model.predict(pairs, show_progress_bar=False)
+        # Get scores via API or local model
+        if self.use_deepinfra:
+            scores = self._rerank_via_api(query, doc_texts)
+        else:
+            scores = self._rerank_local(query, doc_texts)
         
         # Sort by score (descending)
         scored_docs = list(zip(documents, scores))
@@ -96,6 +103,18 @@ class RerankService:
         top_scores = [float(score) for _, score in scored_docs[:top_n]]
         
         return top_docs, top_scores
+    
+    def _rerank_via_api(self, query: str, doc_texts: List[str]) -> List[float]:
+        """Rerank via Deep Infra API"""
+        client = self._get_deepinfra_client()
+        return client.rerank_sync(query, doc_texts)
+    
+    def _rerank_local(self, query: str, doc_texts: List[str]) -> List[float]:
+        """Rerank using local model"""
+        model = self._load_local_model()
+        pairs = [[query, text] for text in doc_texts]
+        scores = model.predict(pairs, show_progress_bar=False)
+        return list(scores)
 
 
 # Global instance
