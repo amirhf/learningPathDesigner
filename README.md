@@ -2,7 +2,7 @@
 
 **Structured RAG + Planner–Executor agents in Go + Python**
 
-Live demo: https://learning-path-designer-git-main-amir-firouzs-projects.vercel.app
+Live demo: https://learning-path-designer.vercel.app
 
 ## Why this exists
 
