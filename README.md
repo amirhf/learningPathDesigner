@@ -60,14 +60,14 @@ Observability: OpenTelemetry (Metrics, Traces, Logs) with Jaeger
 - **Frontend:** Next.js 14, TypeScript, Tailwind CSS, shadcn/ui
 - **Gateway:** Go 1.21+, Gin framework
 - **AI Services:** Python 3.11, FastAPI
-- **Embeddings:** e5-base-v2 (768 dims)
-- **Reranker:** bge-reranker-base
+- **Embeddings:** e5-base-v2 via Deep Infra API (768 dims)
+- **Reranker:** Qwen3-Reranker via Deep Infra API
 - **LLM:** OpenRouter (Claude/GPT-4)
 - **Vector DB:** Qdrant Cloud
-- **Database:** PostgreSQL (Neon/Supabase)
+- **Database:** PostgreSQL (Neon)
 - **Auth:** Supabase Auth
-- **Deployment:** Railway + Vercel
-- **Observability:** OpenTelemetry (with Jaeger for traces)
+- **Deployment:** Google Cloud Run + Vercel
+- **Inference:** Deep Infra (serverless embeddings & reranking)
 
 ## Quick Start
 
@@ -199,23 +199,36 @@ Key variables:
 - `OPENROUTER_API_KEY` - OpenRouter API key
 - `SUPABASE_URL` - Supabase project URL
 - `SUPABASE_ANON_KEY` - Supabase anonymous key
-- `OTEL_EXPORTER_OTLP_ENDPOINT` - OpenTelemetry collector endpoint (e.g., `http://jaeger:4317`)
-- `OTEL_SERVICE_NAME` - Unique service name for tracing
+- `DEEPINFRA_API_KEY` - Deep Infra API key for embeddings/reranking
+- `USE_DEEPINFRA` - Set to `true` for API-based inference
 
 ## Deployment
 
-### Railway (Backend Services)
+### Google Cloud Run (Backend Services)
 
-1. Connect GitHub repository
-2. Create services for: gateway, rag, planner, quiz
-3. Set environment variables
-4. Deploy
+The backend uses a lightweight Deep Infra-based deployment (~500MB images vs ~5GB with PyTorch).
+
+```bash
+# Deploy all services
+gcloud builds submit --config=cloudbuild-deploy-mvp.yaml
+```
+
+Services deployed:
+- `gateway` - API gateway (256Mi, 1 CPU)
+- `rag-service` - RAG with Deep Infra embeddings (512Mi, 1 CPU)
+- `planner-service` - Learning path generation (512Mi, 1 CPU)
+- `quiz-service` - Quiz generation (512Mi, 1 CPU)
+
+All services scale to zero when idle for cost efficiency.
 
 ### Vercel (Frontend)
 
 1. Connect GitHub repository
 2. Set root directory to `/frontend`
-3. Set environment variables
+3. Set environment variables:
+   - `NEXT_PUBLIC_API_URL` - Gateway URL
+   - `NEXT_PUBLIC_SUPABASE_URL`
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 4. Deploy
 
 ## Documentation

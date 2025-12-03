@@ -1,0 +1,36 @@
+# Lightweight Dockerfile for Deep Infra serverless inference
+# Image size: ~200MB (vs ~3GB+ with PyTorch)
+
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install minimal runtime dependencies
+RUN apt-get update && apt-get install -y \
+    libpq5 \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Install Python dependencies (no PyTorch/transformers)
+COPY requirements.deepinfra.txt requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy application code only (no model files needed)
+COPY config.py .
+COPY deepinfra_client.py .
+COPY embeddings.py .
+COPY rerank.py .
+COPY search.py .
+COPY models.py .
+COPY main.py .
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD python -c "import httpx; httpx.get('http://localhost:8001/health')" || exit 1
+
+EXPOSE 8001 8080
+
+# Default to Deep Infra mode
+ENV USE_DEEPINFRA=true
+
+CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8001}"]

@@ -1,10 +1,8 @@
 """
-Embedding generation using e5-base-v2 with optional quantization
+Embedding generation with Deep Infra API or local fallback
 """
 import logging
 from typing import List
-from sentence_transformers import SentenceTransformer
-import torch
 
 from config import get_settings
 
@@ -13,44 +11,53 @@ settings = get_settings()
 
 
 class EmbeddingService:
-    """Service for generating embeddings with quantization support"""
+    """Service for generating embeddings via API or local model"""
     
     def __init__(self):
-        self.model = None
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        logger.info(f"Using device: {self.device}")
+        self.use_deepinfra = settings.use_deepinfra
+        self._local_model = None  # Lazy loaded only if needed
+        self._deepinfra_client = None
+        
+        if self.use_deepinfra:
+            logger.info("EmbeddingService initialized with Deep Infra API")
+        else:
+            logger.info("EmbeddingService initialized with local PyTorch model")
     
-    def load_model(self):
-        """Load the embedding model with optional quantization"""
-        if self.model is None:
-            logger.info(f"Loading embedding model: {settings.embedding_model}")
-            logger.info("(Model cached in image, loading from disk...)")
+    def _get_deepinfra_client(self):
+        """Lazy load Deep Infra client"""
+        if self._deepinfra_client is None:
+            from deepinfra_client import get_deepinfra_client
+            self._deepinfra_client = get_deepinfra_client()
+        return self._deepinfra_client
+    
+    def _load_local_model(self):
+        """Load local PyTorch model (fallback)"""
+        if self._local_model is None:
+            import torch
+            from sentence_transformers import SentenceTransformer
             
-            # Load model (will use cached version from Docker image)
-            self.model = SentenceTransformer(settings.embedding_model, device=self.device)
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            logger.info(f"Loading local embedding model: {settings.embedding_model} on {device}")
+            
+            self._local_model = SentenceTransformer(settings.embedding_model, device=device)
             
             # Apply quantization if enabled
             if settings.use_quantization and settings.quantization_config != "none":
-                logger.info(f"Applying {settings.quantization_config} quantization...")
-                
-                # For CPU, use dynamic quantization
-                if self.device == "cpu":
-                    # Apply dynamic quantization to reduce model size and improve inference speed
-                    self.model[0].auto_model = torch.quantization.quantize_dynamic(
-                        self.model[0].auto_model,
+                if device == "cpu":
+                    self._local_model[0].auto_model = torch.quantization.quantize_dynamic(
+                        self._local_model[0].auto_model,
                         {torch.nn.Linear},
                         dtype=torch.qint8
                     )
-                    logger.info("✓ Applied INT8 quantization (75% memory reduction)")
+                    logger.info("✓ Applied INT8 quantization")
                 else:
-                    # For CUDA, use half precision
-                    if hasattr(self.model, 'half'):
-                        self.model = self.model.half()
-                        logger.info("✓ Using FP16 precision (50% memory reduction)")
-            else:
-                logger.info("Quantization disabled, using full precision")
+                    if hasattr(self._local_model, 'half'):
+                        self._local_model = self._local_model.half()
+                        logger.info("✓ Using FP16 precision")
             
-            logger.info("✓ Embedding model ready")
+            logger.info("✓ Local embedding model ready")
+        
+        return self._local_model
     
     def generate_embeddings(
         self,
@@ -67,24 +74,29 @@ class EmbeddingService:
         Returns:
             List of embedding vectors
         """
-        if self.model is None:
-            self.load_model()
-        
         # Add instruction prefix for e5 models
-        if instruction == "query":
-            prefixed_texts = [f"query: {text}" for text in texts]
-        else:
-            prefixed_texts = [f"passage: {text}" for text in texts]
+        prefix = "query: " if instruction == "query" else "passage: "
+        prefixed_texts = [f"{prefix}{text}" for text in texts]
         
-        # Generate embeddings
-        embeddings = self.model.encode(
-            prefixed_texts,
+        if self.use_deepinfra:
+            return self._generate_via_api(prefixed_texts)
+        else:
+            return self._generate_local(prefixed_texts)
+    
+    def _generate_via_api(self, texts: List[str]) -> List[List[float]]:
+        """Generate embeddings via Deep Infra API"""
+        client = self._get_deepinfra_client()
+        return client.generate_embeddings_sync(texts)
+    
+    def _generate_local(self, texts: List[str]) -> List[List[float]]:
+        """Generate embeddings using local model"""
+        model = self._load_local_model()
+        embeddings = model.encode(
+            texts,
             batch_size=16,
             show_progress_bar=False,
             convert_to_numpy=True
         )
-        
-        # Convert to list of lists
         return embeddings.tolist()
     
     def generate_single_embedding(self, text: str, instruction: str = "passage") -> List[float]:

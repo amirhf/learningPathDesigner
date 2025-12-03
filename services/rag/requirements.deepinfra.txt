@@ -1,0 +1,33 @@
+# Deep Infra deployment - lightweight (no PyTorch/transformers)
+# Use this for serverless inference via API
+
+# Web framework
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pydantic==2.5.0
+pydantic-settings==2.1.0
+
+# Vector database
+qdrant-client==1.7.0
+
+# HTTP client for Deep Infra API
+httpx==0.25.0
+
+# Utilities
+python-dotenv==1.0.0
+numpy<2.0.0
+
+# Database
+psycopg2-binary==2.9.9
+
+# Content processing
+boto3==1.29.0
+beautifulsoup4==4.12.2
+lxml==4.9.3
+requests==2.31.0
+
+# Observability
+opentelemetry-api==1.21.0
+opentelemetry-sdk==1.21.0
+opentelemetry-instrumentation-fastapi==0.42b0
+opentelemetry-exporter-otlp==1.21.0
