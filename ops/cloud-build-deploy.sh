@@ -6,7 +6,7 @@ set -e
 
 PROJECT_ID="${GCP_PROJECT_ID:-learnpath-prod}"
 REGION="${GCP_REGION:-europe-west1}"
-ALLOWED_ORIGINS="${ALLOWED_ORIGINS:-https://your-app.vercel.app}"
+ALLOWED_ORIGINS="${ALLOWED_ORIGINS:-*}"
 BUILD_ONLY="${BUILD_ONLY:-false}"
 
 echo "=== Cloud Build Deployment ==="

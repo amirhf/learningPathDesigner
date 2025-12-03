@@ -94,3 +94,6 @@ secrets/
 *.pem
 *.key
 
+# Exceptions
+!gateway/internal/models/
+

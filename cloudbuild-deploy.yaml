@@ -2,6 +2,16 @@
 # Builds images AND deploys to Cloud Run
 
 steps:
+  # 0. Fetch models from GCS (Cache)
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        mkdir -p ./services/rag/models_cache/
+        gsutil -m cp -r gs://learnpath-models-$PROJECT_ID/* ./services/rag/models_cache/
+    id: 'fetch-models'
+
   # Build all images first
   - name: 'gcr.io/cloud-builders/docker'
     args: ['build', '-t', 'gcr.io/$PROJECT_ID/otel-collector:latest', './ops/observability']
@@ -10,6 +20,7 @@ steps:
   - name: 'gcr.io/cloud-builders/docker'
     args: ['build', '-t', 'gcr.io/$PROJECT_ID/rag-service:latest', './services/rag']
     id: 'build-rag'
+    waitFor: ['fetch-models']
   
   - name: 'gcr.io/cloud-builders/docker'
     args: ['build', '-t', 'gcr.io/$PROJECT_ID/planner-service:latest', './services/planner']
@@ -60,7 +71,7 @@ steps:
       - '--region=${_REGION}'
       - '--platform=managed'
       - '--allow-unauthenticated'
-      - '--memory=512Mi'
+      - '--memory=1Gi'
       - '--cpu=1'
       - '--timeout=300'
       - '--concurrency=80'
