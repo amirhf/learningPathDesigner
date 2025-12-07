@@ -233,9 +233,6 @@ All services scale to zero when idle for cost efficiency.
 
 ## Documentation
 
-- [Implementation Plan](planning/implementation_steps.md)
-- [Design Document](planning/design.md)
-- [Lean Deployment Guide](planning/lean_deployment_plan.md)
 - [ADR-001: RAG Architecture](docs/adr/adr-001-rag-architecture.md)
 - [ADR-002: Multi-tenancy Strategy](docs/adr/adr-002-multi-tenancy-strategy.md)
 
